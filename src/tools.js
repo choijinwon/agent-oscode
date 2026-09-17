@@ -1,3 +1,4 @@
+import { inspectTokens, inspectImpact, storyRecipe } from './frontend-quality.js';
 import { inspectArchitecture } from './architecture.js';
 import { inspectComponent } from './components.js';
 import { checkUi, uiSummary, validateUiUrl } from './ui-check.js';
@@ -8,12 +9,15 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { clip } from './context.js';
 
-const str = { type: 'string' }, integer = { type: 'integer' };
+const str = { type: 'string' }, bool = { type: 'boolean' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('tailwind_tokens', 'Inspect bounded CSS tokens and literal arbitrary Tailwind utility candidates without executing configuration.', { path: str }, []),
+  tool('frontend_impact', 'AST-based reverse import impact for a project source file, including root tsconfig aliases and re-exports; bounded candidate analysis.', { path: str }, ['path']),
+  tool('storybook_recipe', 'Generate a React default-export CSF story recipe with optional JSON state args and role/name visibility assertions. Read-only; apply via file tools.', { path: str, states: str, role: str, name: str }, ['path']),
   tool('frontend_architecture', 'Inspect bounded frontend folder roles, client directives and relative import cycle/layer candidates. Heuristic, read-only; verify source before proposing architecture changes.', { path: str }, []),
   tool('ui_component', 'Get a bounded MUI, Ant Design or Bootstrap component starter, dependencies, setup guidance and existing file candidates. Read-only; then adapt with existing edit/write tools in BUILD.', { library: str, component: str, path: str }, ['library']),
-  tool('ui_check', 'Open a user-provided HTTP(S) app URL in isolated Chromium; capture viewport screenshots, overflow and browser errors. Requires shell permission; BUILD only. Artifacts stored locally. Page JavaScript/network requests run.', { url: str, viewport: str }, ['url']),
+  tool('ui_check', 'Open a user-provided HTTP(S) app URL in isolated Chromium; capture viewport screenshots, overflow and browser errors. Requires shell permission; BUILD only. Artifacts stored locally. Page JavaScript/network requests run.', { url: str, viewport: str, scenario: str, baseline: str, a11y: bool }, ['url']),
   tool('frontend_inspect', 'Inspect frontend stack, scripts and bounded component/style/test paths without executing project code. Scope path to an app in monorepos.', { path: str }, []),
   tool('list_files', 'List project files, respecting Git ignore rules when Git is available. Use a subdirectory to narrow results.', { path: str }, []),
   tool('read_file', 'Read a bounded line range. Read a file before editing it.', { path: str, start: integer, lines: integer }, ['path']),
@@ -105,7 +109,7 @@ export class WorkspaceTools {
     for (const key of def.parameters.required) if (!(key in input)) throw new Error(`Missing ${key}.`);
     for (const [key, value] of Object.entries(input)) {
       const schema = def.parameters.properties[key];
-      if (!schema || (schema.type === 'string' ? typeof value !== 'string' : !Number.isInteger(value))) throw new Error(`Invalid argument ${key}.`);
+      if (!schema || (schema.type === 'string' ? typeof value !== 'string' : schema.type === 'boolean' ? typeof value !== 'boolean' : !Number.isInteger(value))) throw new Error(`Invalid argument ${key}.`);
     }
   }
   async execute(name, input, signal) {
@@ -124,9 +128,13 @@ export class WorkspaceTools {
       validateUiUrl(input.url);
       this.onPreview(`Browser UI check: ${input.url} (${input.viewport || 'all'}); runs page scripts and saves local artifacts.`);
       if (!(await this.approve('shell', `Browser UI check: ${input.url}`, signal))) throw new Error('Browser execution denied.');
-      const report = await checkUi({ root: this.root, ...input, signal });
+      const scenario = input.scenario ? JSON.parse(await this.text(await this.resolve(input.scenario))) : undefined;
+      const report = await checkUi({ root: this.root, ...input, scenario, signal });
       return uiSummary(report);
     }
+    if (name === 'tailwind_tokens') return inspectTokens(this, input.path, signal);
+    if (name === 'frontend_impact') return inspectImpact(this, input.path, signal);
+    if (name === 'storybook_recipe') return storyRecipe(this, input, signal);
     if (name === 'frontend_architecture') return inspectArchitecture(this, input.path, signal);
     if (name === 'ui_component') return inspectComponent(this, input, signal);
     if (name === 'frontend_inspect') return inspectFrontend(this, input.path, signal);

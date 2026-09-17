@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { approveBaseline } from '../src/ui-workflow.js';
+import { storyRecipe } from '../src/frontend-quality.js';
 import { componentRecipe } from '../src/components.js';
 import { checkUi, uiSummary } from '../src/ui-check.js';
 import fs from 'node:fs/promises';
@@ -29,6 +31,15 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 설정:
   --cwd PATH                        프로젝트 폴더 (기본: 현재 폴더)
   --agent general|frontend          프론트엔드 전문 모드 (OSCODE_AGENT)
+  --tokens                         Tailwind 토큰/임의 값 후보 진단
+  --impact PATH                    변경 파일의 영향·테스트 후보 분석
+  --story PATH                     React CSF 스토리 생성 미리보기
+  --states PATH                    스토리 이름별 args JSON 파일
+  --story-role ROLE --story-name NAME  스토리 가시성 검증 추가
+  --scenario PATH                  UI 검사에서 실행할 단계 JSON
+  --a11y                           UI 검사에 axe 접근성 검사 추가
+  --baseline NAME                  승인된 이미지와 비교
+  --approve-baseline RUN_ID         검토한 UI 실행을 --baseline 이름으로 승인
   --architecture                   프론트엔드 구조·의존성 후보 진단 (API 불필요)
   --component LIBRARY/NAME          mui·antd·bootstrap 컴포넌트 조회 (API 불필요)
   --output PATH                    조회한 스타터를 새 파일로 생성 (--yes 필요)
@@ -64,15 +75,15 @@ async function main() {
   const raw = process.argv.slice(2);
   const cliArgs = raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
-    ...['component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+    ...['a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
-  if (args.output && !args.component) throw new Error('--output requires --component.');
+  if (args.output && !args.component && !args.story) throw new Error('--output requires --component or --story.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
   const project = await readProjectConfig(root);
@@ -82,13 +93,28 @@ async function main() {
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
   if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
+  if ((args.scenario || args.a11y) && !args['ui-check']) throw new Error('--scenario/--a11y require ui check.');
+  if (args.baseline && !args['ui-check'] && !args['approve-baseline']) throw new Error('--baseline requires ui check or --approve-baseline.');
+  if ((args.states || args['story-role'] || args['story-name']) && !args.story) throw new Error('Story options require --story.');
+  if (args['approve-baseline']) {
+    if (!args.baseline) throw new Error('--approve-baseline requires --baseline NAME.');
+    if (config.plan || config.permissions.write === 'deny') throw new Error('Baseline approval blocked by mode or write permissions.');
+    print(await approveBaseline(root, args['approve-baseline'], args.baseline)); return;
+  }
+  if (args.tokens || args.impact) {
+    const tool = new WorkspaceTools(root, { readOnly: true, outputLimit: config.outputLimit });
+    const result = await tool.execute(args.tokens ? 'tailwind_tokens' : 'frontend_impact', args.tokens ? {} : { path: args.impact });
+    print(result.content); if (result.is_error) process.exitCode = 1; return;
+  }
   if (args.viewport && !args['ui-check']) throw new Error('--viewport requires --ui-check or ui check.');
   if (args['ui-check']) {
     if (config.plan || config.permissions.shell === 'deny') throw new Error('Browser check is blocked by plan mode or shell permissions.');
     const controller = new AbortController();
     const cancel = () => controller.abort(); process.on('SIGINT', cancel);
     try {
-      const report = await checkUi({ root, url: args['ui-check'], viewport: args.viewport || 'all', signal: controller.signal });
+      const reader = new WorkspaceTools(root, { readOnly: true });
+      const scenario = args.scenario ? JSON.parse(await reader.text(await reader.resolve(args.scenario))) : undefined;
+      const report = await checkUi({ root, scenario, baseline: args.baseline, a11y: args.a11y, url: args['ui-check'], viewport: args.viewport || 'all', signal: controller.signal });
       print(uiSummary(report));
       if (report.incomplete) process.exitCode = 1; else if (report.findings) process.exitCode = 2;
     } finally { process.removeListener('SIGINT', cancel); }
@@ -106,6 +132,18 @@ async function main() {
   if (args['show-plan']) { print(renderPlan(session)); return; }
   if (args['apply-plan']) getApplicablePlan(session, { locked: planLocked });
   const checkpoints = new Checkpoints(session);
+  if (args.story) {
+    const tool = new WorkspaceTools(root, { readOnly: config.plan, permissions: config.permissions, checkpoints, onPreview: print, approve: async () => Boolean(args.yes) });
+    const recipe = JSON.parse(await storyRecipe(tool, { path: args.story, states: args.states, role: args['story-role'], name: args['story-name'] }));
+    print(JSON.stringify(recipe, null, 2));
+    if (args.output) {
+      if (path.resolve(root, args.output) !== path.resolve(root, recipe.output)) throw new Error(`Colocated output required: ${recipe.output}`);
+      if (!args.yes) throw new Error('Review recipe and pass --yes to create the story.');
+      const result = await tool.execute('write_file', { path: args.output, content: recipe.code });
+      print(result.content); if (result.is_error) process.exitCode = 1;
+    }
+    return;
+  }
   if (args.component) {
     const [library, component, extra] = args.component.split('/');
     if (extra !== undefined) throw new Error('Use --component mui/button, antd/card or bootstrap/dropdown.');
@@ -175,7 +213,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.6.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.7.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }

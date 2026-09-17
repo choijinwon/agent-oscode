@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "action": "fill", "selector": "#name", "value": "Demo" },
+    { "action": "click", "selector": "button[type=submit]" },
+    { "action": "text", "selector": "[role=status]", "value": "Saved" }
+  ]
+}

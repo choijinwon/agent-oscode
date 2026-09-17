@@ -182,3 +182,7 @@ npm run check
 ## 컴포넌트와 아키텍처
 
 `oscode --component mui/button`으로 MUI·Ant Design·Bootstrap 스타터와 프로젝트 적용 안내를 조회하세요. `--output ActionButton.jsx --yes`는 새 파일을 생성합니다. `oscode --architecture`는 폴더 역할·상대 import 순환 등 구조 후보를 진단합니다. 프론트엔드 에이전트와 PLAN에도 연결됩니다. [컴포넌트 적용](docs/components.md) · [프론트엔드 아키텍처](docs/frontend-architecture.md).
+
+## 프론트엔드 품질 워크플로
+
+저장된 시나리오 실행, 승인된 스크린샷 비교, axe 접근성 검사, Tailwind 토큰 진단, AST 변경 영향 분석, Storybook 상태·가시성 검증 스타터를 제공합니다. [사용법·예제·검사 범위](docs/frontend-quality.md).

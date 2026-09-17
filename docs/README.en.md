@@ -99,3 +99,7 @@ Tests include a local mock HTTP/SSE provider and do not require paid model calls
 ## Frontend specialist
 
 Use `oscode --agent frontend` for component, responsive layout and accessibility work. `--inspect-frontend` reports declared frameworks, package manager, available script names and bounded file samples without API calls or executing project scripts. Combine with `--plan`; approved plans retain their specialization. Switch with `/agent frontend|general`, or inspect a monorepo app with `/frontend apps/web`. Existing permissions and token limits apply. Use `oscode ui check URL` for Chromium viewport screenshots, overflow candidates and browser errors (optional Playwright + Chromium required). It is an initial-load diagnostic, not complete visual/accessibility validation.
+
+## Frontend quality workflow
+
+`ui check URL --scenario FILE --a11y` runs bounded saved steps and automated accessibility rules. Review PNGs before approving an immutable baseline using `--approve-baseline RUN_ID --baseline NAME`; compare with `ui check URL --baseline NAME`. Use `--tokens`, `--impact PATH`, and `--story PATH` for token candidates, AST reverse imports and React CSF stories. Story generation supports explicit state args and optional role/name visibility assertions. [Details and limits](frontend-quality.md). Optional dependencies are required for browser, AST and image analysis.

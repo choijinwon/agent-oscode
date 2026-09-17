@@ -1,3 +1,4 @@
+import { validateScenario, runScenario, captureKey, compareBaseline, auditAccessibility } from './ui-workflow.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { sessionDirectory } from './session.js';
@@ -11,8 +12,9 @@ export function validateUiUrl(value) {
 function safeUrl(value) {
   try { const url = new URL(value); return `${url.origin}${url.pathname}`.slice(0, 300); } catch { return '[invalid URL]'; }
 }
-export async function checkUi({ root, url, viewport = 'all', signal, chromium: injected }) {
+export async function checkUi({ root, url, viewport = 'all', signal, scenario, baseline, a11y = false, chromium: injected }) {
   url = validateUiUrl(url);
+  if (scenario) validateScenario(scenario);
   if (viewport !== 'all' && !Object.hasOwn(viewports, viewport)) throw new Error('viewport must be all, mobile, tablet or desktop.');
   if (signal?.aborted) throw new Error('Cancelled.');
   let chromium = injected;
@@ -29,11 +31,12 @@ export async function checkUi({ root, url, viewport = 'all', signal, chromium: i
   try {
     if (signal?.aborted) throw new Error('Cancelled.');
     const dir = await fs.mkdtemp(path.join(await sessionDirectory(root), 'ui-'));
-    const report = { version: 1, url: safeUrl(url), created: new Date().toISOString(), directory: dir, results: [], limitations: 'Initial page load only; 500 ms settling, top-document DOM capped at 5000 elements. Overflow candidates may be intentional. No interaction, pixel baseline, complete accessibility audit or source-map attribution. Screenshots and messages may contain page data.' };
+    const report = { version: 2, captureKey: captureKey(url, scenario), environment: { platform: process.platform, browser: browser.version() }, url: safeUrl(url), created: new Date().toISOString(), directory: dir, results: [], limitations: 'Page load and optional saved scenario; 500 ms settling, top-document DOM capped at 5000 elements. Overflow candidates may be intentional. Optional pixel comparison and automated accessibility checks; no complete accessibility audit or source-map attribution. Screenshots and messages may contain page data.' };
     for (const [name, size] of Object.entries(viewports).filter(([name]) => viewport === 'all' || name === viewport)) {
       if (signal?.aborted) throw new Error('Cancelled.');
       const context = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block', acceptDownloads: false });
       try {
+        if (scenario) await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
         const page = await context.newPage();
         page.setDefaultTimeout(10000);
         const result = { viewport: name, ...size, console: [], errors: [], requests: [], overflow: null, screenshot: null };
@@ -47,6 +50,8 @@ export async function checkUi({ root, url, viewport = 'all', signal, chromium: i
           const response = await page.goto(url, { waitUntil: 'load', timeout: 10000 });
           result.status = response?.status() ?? null;
           await page.waitForTimeout(500);
+          if (scenario) result.scenario = await runScenario(page, scenario);
+          if (a11y) result.accessibility = await auditAccessibility(page);
           result.overflow = await page.evaluate(() => {
             const width = document.documentElement.clientWidth;
             const all = document.querySelectorAll('body *');
@@ -69,12 +74,14 @@ export async function checkUi({ root, url, viewport = 'all', signal, chromium: i
           const shot = path.join(dir, `${name}.png`);
           await page.screenshot({ path: shot, animations: 'disabled', timeout: 10000 });
           result.screenshot = shot;
+          if (baseline) result.visual = await compareBaseline(root, baseline, report.captureKey, report.environment, name, shot, path.join(dir, `${name}-diff.png`));
         } catch (error) { result.error = String(error.message).slice(0, 400); }
+        if (scenario) { result.trace = path.join(dir, `${name}-trace.zip`); await context.tracing.stop({ path: result.trace }); }
         report.results.push(result);
       } finally { await context.close(); }
     }
     if (signal?.aborted) throw new Error('Cancelled.');
-    report.findings = report.results.reduce((n, r) => n + (r.overflow?.pixels > 1 ? 1 : 0) + r.errors.length + r.requests.length + r.console.length, 0);
+    report.findings = report.results.reduce((n, r) => n + (r.overflow?.pixels > 1 ? 1 : 0) + r.errors.length + r.requests.length + r.console.length + (r.scenario && !r.scenario.passed ? 1 : 0) + (r.visual?.changed ? 1 : 0) + (r.accessibility?.totalViolations || 0), 0);
     report.incomplete = report.results.some(r => r.error);
     report.file = path.join(dir, 'report.json');
     await fs.writeFile(report.file, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
@@ -83,6 +90,6 @@ export async function checkUi({ root, url, viewport = 'all', signal, chromium: i
 }
 export function uiSummary(report) {
   return JSON.stringify({ report: report.file, findings: report.findings, incomplete: report.incomplete,
-    results: report.results.map(r => ({ viewport: r.viewport, overflowPixels: r.overflow?.pixels, candidates: r.overflow?.candidates.slice(0, 3), errors: r.errors.slice(0, 2), console: r.console.slice(0, 2), requests: r.requests.slice(0, 2), screenshot: r.screenshot, ...(r.error ? { error: r.error } : {}) })),
+    results: report.results.map(r => ({ viewport: r.viewport, overflowPixels: r.overflow?.pixels, candidates: r.overflow?.candidates.slice(0, 3), errors: r.errors.slice(0, 2), console: r.console.slice(0, 2), requests: r.requests.slice(0, 2), screenshot: r.screenshot, scenario: r.scenario, trace: r.trace, visual: r.visual, accessibility: r.accessibility ? { totalViolations: r.accessibility.totalViolations, violations: r.accessibility.violations.slice(0, 2), incompleteRules: r.accessibility.incompleteRules } : undefined, ...(r.error ? { error: r.error } : {}) })),
     note: 'Bounded diagnostic summary; full report and screenshots are local. Findings are candidates, not proof of root cause. Rerun the affected viewport after fixes.' }, null, 2);
 }
