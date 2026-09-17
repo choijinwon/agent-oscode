@@ -1,3 +1,4 @@
+import { frontendContext } from './frontend-context.js';
 import { verifyProject } from './verify.js';
 import { inspectTokens, inspectImpact, storyRecipe } from './frontend-quality.js';
 import { inspectArchitecture } from './architecture.js';
@@ -13,6 +14,7 @@ import { clip } from './context.js';
 const str = { type: 'string' }, bool = { type: 'boolean' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('frontend_context', 'Read a bounded component and direct relative imports, adjacent styles and Angular templates. Reuse imported UI components and tokens. Aliases/dynamic/transitive imports may be missing; expand with read_file. Read exact source before editing.', { path: str }, ['path']),
   tool('verify_project', 'Run configured project verification scripts and optional dev server/browser diagnostics; save local HTML/JSON report. BUILD only, shell approvals required. changed means working tree relative to HEAD.', { changed: bool, start: str, url: str }, []),
   tool('tailwind_tokens', 'Inspect bounded CSS tokens and literal arbitrary Tailwind utility candidates without executing configuration.', { path: str }, []),
   tool('frontend_impact', 'AST-based reverse import impact for a project source file, including root tsconfig aliases and re-exports; bounded candidate analysis.', { path: str }, ['path']),
@@ -144,6 +146,7 @@ export class WorkspaceTools {
     if (name === 'storybook_recipe') return storyRecipe(this, input, signal);
     if (name === 'frontend_architecture') return inspectArchitecture(this, input.path, signal);
     if (name === 'ui_component') return inspectComponent(this, input, signal);
+    if (name === 'frontend_context') return frontendContext(this, input.path, signal);
     if (name === 'frontend_inspect') return inspectFrontend(this, input.path, signal);
     if (name === 'list_files') {
       const files = await this.files(input.path, signal);

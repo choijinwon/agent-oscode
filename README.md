@@ -25,6 +25,17 @@ The demo reads local project files without calling a model or requiring an API k
 
 OpenCode의 여러 모델 연결 방식, Pi의 작고 분리된 실행 코어, Claude 계열 도구의 탐색·편집·검증 흐름을 참고한 **독립 구현**이다. 원본 프로젝트 소스나 Claude Code를 합친 제품은 아니며, 현재 연결은 Anthropic Messages API와 Chat Completions 호환 API다.
 
+## 프론트엔드 토큰 절약과 A/B 비교
+
+`--agent frontend`는 컴포넌트와 직접 연결된 코드부터 읽도록 안내하고, 긴 셸 결과를 요약합니다. `--context-mode standard`로 기존 동작을 사용할 수 있습니다.
+
+```sh
+node bin/oscode.js --frontend-context src/components/Card.vue
+node bin/oscode.js --ab-context src/components/Card.vue --prompt '개선 계획'
+```
+
+기본 A/B는 API 없이 입력 추정치를 비교합니다. `--ab-live --model YOUR_MODEL_ID`를 추가하면 같은 스냅샷을 동일 모델에 두 번 보내 사용량·응답 시간을 기록합니다. 코드 수정·테스트 성공률은 평가하지 않습니다. [범위, 예산과 결과 해석](docs/frontend-token-ab.md)
+
 ## 바로 실행
 
 ```sh

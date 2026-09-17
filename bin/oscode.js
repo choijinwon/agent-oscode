@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { compareFrontendContext, frontendContext } from '../src/frontend-context.js';
 import { verifyProject } from '../src/verify.js';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -35,6 +36,10 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 설정:
+  --frontend-context PATH           컴포넌트와 직접 의존성 컨텍스트 확인
+  --context-mode focused|standard   프론트엔드 컨텍스트·출력 요약 (기본 focused)
+  --ab-context PATH                 A/B 입력 토큰 추정 비교·JSON 저장
+  --ab-live                         동일 모델에 두 번 요청하여 실제 사용량 비교
   --cwd PATH                        프로젝트 폴더 (기본: 현재 폴더)
   --agent general|frontend          프론트엔드 전문 모드 (OSCODE_AGENT)
   --tokens                         Tailwind 토큰/임의 값 후보 진단
@@ -81,14 +86,15 @@ async function main() {
   const raw = process.argv.slice(2);
   const cliArgs = raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
-    ...['start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+    ...['ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
+  if (args['ab-live'] && !args['ab-context']) throw new Error('--ab-live requires --ab-context.');
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
-  if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
+  const maintenance = ['frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  if (maintenance.length > 1 || (maintenance.length && ((args.prompt && !args['ab-context']) || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if ((args.changed || args.start || args.url || args.open) && !args.verify) throw new Error('--changed/--start/--url/--open require verify.');
   if (args.verify && (args.scenario || args.a11y || args.baseline || args.viewport)) throw new Error('Use ui check for scenario/a11y/baseline/viewport options.');
   if (args.output && !args.component && !args.story) throw new Error('--output requires --component or --story.');
@@ -96,6 +102,20 @@ async function main() {
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
   const project = await readProjectConfig(root);
   const config = resolveConfig(project, args);
+  if (args['frontend-context']) {
+    print(await frontendContext(new WorkspaceTools(root, { readOnly: true, outputLimit: 16000 }), args['frontend-context'])); return;
+  }
+  if (args['ab-context']) {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.on('SIGINT', stop);
+    try {
+      const report = await compareFrontendContext({ tools: new WorkspaceTools(root, { readOnly: true }), target: args['ab-context'], prompt: args.prompt, config,
+        provider: args['ab-live'] ? createProvider(config) : undefined, signal: controller.signal });
+      print(JSON.stringify(report, null, 2));
+    } finally { process.off('SIGINT', stop); }
+    return;
+  }
   const planLocked = Boolean(project.plan || args.demo);
   const readSaved = args.resume || (args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);

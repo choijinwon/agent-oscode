@@ -8,11 +8,12 @@ export const profiles = {
 };
 const numbers = ['budget', 'maxInput', 'maxOutput', 'maxSteps', 'outputLimit', 'loopLimit'];
 const strings = ['model', 'baseUrl', 'testCommand'];
-const allowed = new Set(['verify', 'agent', 'profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
+const allowed = new Set(['contextMode', 'verify', 'agent', 'profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 export function validateProjectConfig(data) {
   if (!object(data)) throw new Error('oscode.json must be an object.');
   for (const key of Object.keys(data)) if (!allowed.has(key)) throw new Error(`Unsupported oscode.json key: ${key}. API keys belong in environment variables.`);
+  if (data.contextMode !== undefined && !['focused', 'standard'].includes(data.contextMode)) throw new Error('contextMode must be focused or standard.');
   if (data.verify !== undefined) validateVerify(data.verify);
   if (data.agent !== undefined && !['general', 'frontend'].includes(data.agent)) throw new Error('agent must be general or frontend.');
   if (data.profile !== undefined && !Object.hasOwn(profiles, data.profile)) throw new Error('profile must be economy or balanced.');
@@ -52,6 +53,7 @@ export function resolveConfig(project = {}, args = {}, env = process.env) {
   const profile = args.profile ?? env.OSCODE_PROFILE ?? project.profile ?? 'economy';
   if (!Object.hasOwn(profiles, profile)) throw new Error('Profile must be economy or balanced.');
   const merged = { ...profiles[profile], loopLimit: 3, ...project, profile,
+    contextMode: args['context-mode'] ?? project.contextMode ?? 'focused',
     agent: args.agent ?? env.OSCODE_AGENT ?? project.agent ?? 'general',
     provider: args.provider ?? env.OSCODE_PROVIDER ?? project.provider ?? 'anthropic',
     model: args.model ?? env.OSCODE_MODEL ?? project.model,
