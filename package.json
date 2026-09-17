@@ -11,7 +11,8 @@
     "test": "node --test",
     "check": "node scripts/check.js",
     "demo": "node bin/oscode.js --demo",
-    "frontend": "node bin/oscode.js --agent frontend"
+    "frontend": "node bin/oscode.js --agent frontend",
+    "prepublishOnly": "npm run check && npm test"
   },
   "engines": {
     "node": ">=22"
@@ -59,5 +60,9 @@
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
     "typescript": "5.9.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
