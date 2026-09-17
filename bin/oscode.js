@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { componentRecipe } from '../src/components.js';
 import { checkUi, uiSummary } from '../src/ui-check.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -28,6 +29,9 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 설정:
   --cwd PATH                        프로젝트 폴더 (기본: 현재 폴더)
   --agent general|frontend          프론트엔드 전문 모드 (OSCODE_AGENT)
+  --architecture                   프론트엔드 구조·의존성 후보 진단 (API 불필요)
+  --component LIBRARY/NAME          mui·antd·bootstrap 컴포넌트 조회 (API 불필요)
+  --output PATH                    조회한 스타터를 새 파일로 생성 (--yes 필요)
   --ui-check URL                    위 명령과 동일; 페이지 JS/네트워크 실행
   --viewport all|mobile|tablet|desktop  진단 화면 크기 (기본 all)
   --inspect-frontend                스택·스크립트·파일 진단 (API 불필요)
@@ -60,14 +64,15 @@ async function main() {
   const raw = process.argv.slice(2);
   const cliArgs = raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
-    ...['ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+    ...['architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
+  if (args.output && !args.component) throw new Error('--output requires --component.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
   const project = await readProjectConfig(root);
@@ -89,6 +94,10 @@ async function main() {
     } finally { process.removeListener('SIGINT', cancel); }
     return;
   }
+  if (args.architecture) {
+    const result = await new WorkspaceTools(root, { readOnly: true, outputLimit: config.outputLimit }).execute('frontend_architecture', {});
+    print(result.content); if (result.is_error) process.exitCode = 1; return;
+  }
   if (args['inspect-frontend']) {
     const result = await new WorkspaceTools(root, { readOnly: true, outputLimit: config.outputLimit }).execute('frontend_inspect', {});
     print(result.content); if (result.is_error) process.exitCode = 1; return;
@@ -97,6 +106,22 @@ async function main() {
   if (args['show-plan']) { print(renderPlan(session)); return; }
   if (args['apply-plan']) getApplicablePlan(session, { locked: planLocked });
   const checkpoints = new Checkpoints(session);
+  if (args.component) {
+    const [library, component, extra] = args.component.split('/');
+    if (extra !== undefined) throw new Error('Use --component mui/button, antd/card or bootstrap/dropdown.');
+    const recipe = componentRecipe(library, component);
+    const componentTools = new WorkspaceTools(root, { readOnly: config.plan, permissions: config.permissions, checkpoints, outputLimit: config.outputLimit, onPreview: print, approve: async () => Boolean(args.yes) });
+    const report = await componentTools.execute('ui_component', { library, ...(component ? { component } : {}) });
+    print(report.content); if (report.is_error) { process.exitCode = 1; return; }
+    if (args.output) {
+      if (!component) throw new Error('Select a component before generating a file.');
+      if (path.extname(args.output) !== recipe.extension) throw new Error(`Starter output requires ${recipe.extension}; adapt it to your project after generation.`);
+      if (!args.yes) throw new Error('Review the starter above, then use --yes to create it.');
+      const result = await componentTools.execute('write_file', { path: args.output, content: recipe.code });
+      print(result.content); if (result.is_error) process.exitCode = 1;
+    }
+    return;
+  }
   const undo = async id => {
     if (config.plan || config.permissions.write === 'deny') throw new Error('현재 모드/권한에서 되돌리기를 허용하지 않습니다.');
     const result = await checkpoints.undo(id);
@@ -150,7 +175,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.5.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.6.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }

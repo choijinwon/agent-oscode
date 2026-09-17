@@ -178,3 +178,7 @@ npm run check
 ## 브라우저 UI 진단
 
 `oscode ui check http://localhost:3000`으로 모바일·태블릿·데스크톱 화면과 가로 넘침, 콘솔/네트워크 오류를 확인하세요. 진단은 모델 API 호출 없이 실행하고 결과를 로컬에 저장합니다. `--viewport mobile`로 수정한 화면만 재검사할 수 있습니다. [설치·사용법·검증 범위](docs/ui-check.md).
+
+## 컴포넌트와 아키텍처
+
+`oscode --component mui/button`으로 MUI·Ant Design·Bootstrap 스타터와 프로젝트 적용 안내를 조회하세요. `--output ActionButton.jsx --yes`는 새 파일을 생성합니다. `oscode --architecture`는 폴더 역할·상대 import 순환 등 구조 후보를 진단합니다. 프론트엔드 에이전트와 PLAN에도 연결됩니다. [컴포넌트 적용](docs/components.md) · [프론트엔드 아키텍처](docs/frontend-architecture.md).

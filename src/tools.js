@@ -1,3 +1,5 @@
+import { inspectArchitecture } from './architecture.js';
+import { inspectComponent } from './components.js';
 import { checkUi, uiSummary, validateUiUrl } from './ui-check.js';
 import { inspectFrontend } from './frontend.js';
 import fs from 'node:fs/promises';
@@ -9,6 +11,8 @@ import { clip } from './context.js';
 const str = { type: 'string' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('frontend_architecture', 'Inspect bounded frontend folder roles, client directives and relative import cycle/layer candidates. Heuristic, read-only; verify source before proposing architecture changes.', { path: str }, []),
+  tool('ui_component', 'Get a bounded MUI, Ant Design or Bootstrap component starter, dependencies, setup guidance and existing file candidates. Read-only; then adapt with existing edit/write tools in BUILD.', { library: str, component: str, path: str }, ['library']),
   tool('ui_check', 'Open a user-provided HTTP(S) app URL in isolated Chromium; capture viewport screenshots, overflow and browser errors. Requires shell permission; BUILD only. Artifacts stored locally. Page JavaScript/network requests run.', { url: str, viewport: str }, ['url']),
   tool('frontend_inspect', 'Inspect frontend stack, scripts and bounded component/style/test paths without executing project code. Scope path to an app in monorepos.', { path: str }, []),
   tool('list_files', 'List project files, respecting Git ignore rules when Git is available. Use a subdirectory to narrow results.', { path: str }, []),
@@ -123,6 +127,8 @@ export class WorkspaceTools {
       const report = await checkUi({ root: this.root, ...input, signal });
       return uiSummary(report);
     }
+    if (name === 'frontend_architecture') return inspectArchitecture(this, input.path, signal);
+    if (name === 'ui_component') return inspectComponent(this, input, signal);
     if (name === 'frontend_inspect') return inspectFrontend(this, input.path, signal);
     if (name === 'list_files') {
       const files = await this.files(input.path, signal);
