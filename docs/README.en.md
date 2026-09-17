@@ -1,6 +1,6 @@
-# oscode: a token-aware terminal AI coding agent
+# oscode: an AI coding CLI for frontend developers
 
-oscode is an open-source Node.js command-line coding assistant for Anthropic Claude and Chat Completions-compatible model APIs. It combines a small agent loop with bounded context, usage analytics, file checkpoints, and repeated-tool-call detection.
+oscode is an open-source AI coding CLI for frontend developers using React, Vue, Angular, and Svelte. It supports framework-aware project analysis, native UI component generation, accessibility and responsive checks, and visual comparisons. Plan changes before applying them and manage token budgets and usage from your terminal. The agent connects to Anthropic Claude and Chat Completions-compatible model APIs, with file checkpoints and repeated-tool-call detection.
 
 It is an independent implementation inspired by terminal coding workflows in OpenCode and Pi. It does not bundle those engines or Claude Code, and is not affiliated with their maintainers.
 

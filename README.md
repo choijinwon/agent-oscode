@@ -1,14 +1,16 @@
-# oscode — Token-Aware Terminal AI Coding Agent
+# oscode — Frontend AI Coding Agent CLI
 
 [![CI](https://github.com/choijinwon/agent-oscode/actions/workflows/ci.yml/badge.svg)](https://github.com/choijinwon/agent-oscode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-43853d.svg)](https://nodejs.org/)
 
-**oscode is an open-source terminal AI coding agent for Claude and compatible LLM APIs.** It brings token budgets, streaming responses, code editing, usage analytics, file checkpoints and undo, and repeated-tool-call detection to a small Node.js CLI with optional Playwright browser diagnostics.
+**oscode is an open-source AI coding CLI for frontend developers working with React, Vue, Angular, and Svelte.** It combines framework-aware project analysis and UI component generation with accessibility checks, responsive browser diagnostics, and visual comparisons. Connect Claude or compatible LLM APIs, review work in plan mode, and manage token budgets, usage, and file checkpoints from your terminal.
 
-**토큰 예산을 관리하는 오픈소스 터미널 AI 코딩 에이전트.**
+**React·Vue·Angular·Svelte 프론트엔드 개발자를 위한 오픈소스 AI 코딩 CLI.**
 
-[Website / 소개 홈페이지](https://oscode-terminal.abyys9114.chatgpt.site) · [English guide](docs/README.en.md) · [설정 가이드](docs/configuration.md) · [Architecture](docs/architecture.md) · [Issues](https://github.com/choijinwon/agent-oscode/issues)
+프론트엔드 개발에 필요한 에이전트를 만들기 위해 시작한 OSCODE는 프로젝트 구조 분석부터 UI 컴포넌트 생성, 접근성·반응형 검사까지 터미널에서 이어갈 수 있도록 돕습니다. 플랜 모드로 변경 계획을 검토하고, 토큰 예산과 사용량을 관리하며 개발할 수 있습니다.
+
+[Website / 소개 홈페이지](https://agent-oscode.netlify.app) · [English guide](docs/README.en.md) · [설정 가이드](docs/configuration.md) · [Architecture](docs/architecture.md) · [Issues](https://github.com/choijinwon/agent-oscode/issues)
 
 ```sh
 git clone https://github.com/choijinwon/agent-oscode.git
