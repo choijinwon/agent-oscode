@@ -7,11 +7,12 @@ export const profiles = {
 };
 const numbers = ['budget', 'maxInput', 'maxOutput', 'maxSteps', 'outputLimit', 'loopLimit'];
 const strings = ['model', 'baseUrl', 'testCommand'];
-const allowed = new Set(['profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
+const allowed = new Set(['agent', 'profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 export function validateProjectConfig(data) {
   if (!object(data)) throw new Error('oscode.json must be an object.');
   for (const key of Object.keys(data)) if (!allowed.has(key)) throw new Error(`Unsupported oscode.json key: ${key}. API keys belong in environment variables.`);
+  if (data.agent !== undefined && !['general', 'frontend'].includes(data.agent)) throw new Error('agent must be general or frontend.');
   if (data.profile !== undefined && !Object.hasOwn(profiles, data.profile)) throw new Error('profile must be economy or balanced.');
   if (data.provider !== undefined && !['anthropic', 'compatible'].includes(data.provider)) throw new Error('provider must be anthropic or compatible.');
   for (const key of numbers) if (data[key] !== undefined && (!Number.isSafeInteger(data[key]) || data[key] < (key === 'loopLimit' ? 2 : 1))) throw new Error(`${key} must be a positive integer${key === 'loopLimit' ? ' >= 2' : ''}.`);
@@ -49,6 +50,7 @@ export function resolveConfig(project = {}, args = {}, env = process.env) {
   const profile = args.profile ?? env.OSCODE_PROFILE ?? project.profile ?? 'economy';
   if (!Object.hasOwn(profiles, profile)) throw new Error('Profile must be economy or balanced.');
   const merged = { ...profiles[profile], loopLimit: 3, ...project, profile,
+    agent: args.agent ?? env.OSCODE_AGENT ?? project.agent ?? 'general',
     provider: args.provider ?? env.OSCODE_PROVIDER ?? project.provider ?? 'anthropic',
     model: args.model ?? env.OSCODE_MODEL ?? project.model,
     baseUrl: args['base-url'] ?? env.OSCODE_BASE_URL ?? project.baseUrl,

@@ -69,3 +69,7 @@
 프로젝트 설정의 `plan: true`는 읽기 전용 잠금이다. `/plan off`, `/apply`, `--apply-plan`, `--yes`, `--allow-shell`로 해제되지 않는다. 이 설정을 제거한 뒤 다시 실행해야 구현할 수 있다. CLI의 `--plan`과 대화의 `/plan`은 초기/현재 모드 선택이므로 명시적으로 모드를 전환하거나 계획을 승인할 수 있다.
 
 플랜 모드로 저장한 세션을 재개하면 플랜 모드를 유지한다. `--apply-plan`은 명시적인 실행 요청으로 이 상태를 전환한다. 계획·버전·실행 이력은 기존 `.oscode/<session-id>.json` 안에 저장하며 저장소 파일로 따로 출력하지 않는다. [플랜 모드 가이드](planning.md)를 참고한다.
+
+### 에이전트 전문 모드
+
+`agent: "general" | "frontend"` (기본 general). `--agent frontend` 또는 `OSCODE_AGENT=frontend`로 재정의할 수 있습니다. [프론트엔드 모드](frontend.md)는 PLAN/BUILD와 별도로 동작합니다.

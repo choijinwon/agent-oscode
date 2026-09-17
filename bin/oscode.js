@@ -25,6 +25,8 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 설정:
   --cwd PATH                        프로젝트 폴더 (기본: 현재 폴더)
+  --agent general|frontend          프론트엔드 전문 모드 (OSCODE_AGENT)
+  --inspect-frontend                스택·스크립트·파일 진단 (API 불필요)
   --profile economy|balanced        기본: economy
   --model MODEL                     또는 OSCODE_MODEL
   --provider anthropic|compatible   또는 OSCODE_PROVIDER (기본: anthropic)
@@ -48,17 +50,17 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
-명령: /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
+명령: /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
   const { values: args } = parseArgs({ options: Object.fromEntries([
-    ...['cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+    ...['inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
@@ -68,6 +70,11 @@ async function main() {
   const readSaved = args.resume || (args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
+  if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
+  if (args['inspect-frontend']) {
+    const result = await new WorkspaceTools(root, { readOnly: true, outputLimit: config.outputLimit }).execute('frontend_inspect', {});
+    print(result.content); if (result.is_error) process.exitCode = 1; return;
+  }
   if (args.config) { print(JSON.stringify(config, null, 2)); return; }
   if (args['show-plan']) { print(renderPlan(session)); return; }
   if (args['apply-plan']) getApplicablePlan(session, { locked: planLocked });
@@ -121,10 +128,11 @@ async function main() {
       try { answer = await rl.question(`계획 r${plan.revision}을 실행할까요? [y/N] `); } catch { return; }
       if (!/^y(?:es)?$/i.test(answer.trim())) { print('계획 실행을 취소했습니다.'); return; }
     }
+    config.agent = plan.agent ?? config.agent;
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.3.0 · ${config.provider}/${config.model} · ${config.profile}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.4.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
@@ -133,7 +141,7 @@ async function main() {
     print('/help 명령 목록 · Ctrl+C 실행 취소');
     while (!rl.closed) {
       let input;
-      try { input = (await rl.question(`\noscode [${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
+      try { input = (await rl.question(`\noscode [${config.agent}/${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;
       if (input === '/plan show' || input === '/plan list') { print(renderPlan(session, input === '/plan list')); continue; }
@@ -146,6 +154,17 @@ async function main() {
           if (request && !['on', 'off'].includes(request)) await execute(request);
         } catch (error) { print(error.message); }
         continue;
+      }
+      if (input === '/agent' || input.startsWith('/agent ')) {
+        const agent = input.slice(6).trim();
+        if (!agent) print(`에이전트: ${config.agent}`);
+        else if (!['general', 'frontend'].includes(agent)) print('사용법: /agent general|frontend');
+        else { config.agent = agent; session.agent = agent; await saveSession(session); print(`에이전트: ${agent}`); }
+        continue;
+      }
+      if (input === '/frontend' || input.startsWith('/frontend ')) {
+        const result = await tools.execute('frontend_inspect', { path: input.slice(9).trim() || '.' });
+        print(result.content); continue;
       }
       if (input === '/help') { print(help); continue; }
       if (input === '/usage' || input === '/usage all') { print(usageReport(session, input === '/usage all')); continue; }

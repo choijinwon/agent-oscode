@@ -170,3 +170,7 @@ npm run check
 현재 한계: 실제 API 계정 연동 검증, OpenCode/Pi 실행 엔진 어댑터, MCP, 플러그인, 멀티 에이전트 병렬 실행, 전체 화면 TUI는 포함하지 않는다. 공급자마다 다른 추가 필드나 추론 모드는 아직 지원하지 않는다.
 
 설계와 참고 자료는 [docs/architecture.md](docs/architecture.md)에 정리했다.
+
+## 프론트엔드 전문 모드
+
+`oscode --agent frontend`로 UI 작업에 맞는 에이전트를 사용하세요. 스택·스크립트·컴포넌트 진단, 반응형·접근성·상태 처리 지침과 플랜 모드를 함께 제공합니다. `oscode --inspect-frontend`는 API 호출 없이 프로젝트를 진단합니다. [사용법과 검증 범위](docs/frontend.md).

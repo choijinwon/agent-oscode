@@ -95,3 +95,7 @@ npm run check
 Tests include a local mock HTTP/SSE provider and do not require paid model calls. CI runs on Node.js 22 and 24.
 
 [Architecture](architecture.md) · [Korean guide](../README.md) · [Report an issue](https://github.com/choijinwon/agent-oscode/issues) · [MIT license](../LICENSE)
+
+## Frontend specialist
+
+Use `oscode --agent frontend` for component, responsive layout and accessibility work. `--inspect-frontend` reports declared frameworks, package manager, available script names and bounded file samples without API calls or executing project scripts. Combine with `--plan`; approved plans retain their specialization. Switch with `/agent frontend|general`, or inspect a monorepo app with `/frontend apps/web`. Existing permissions and token limits apply. Browser/visual validation is not built in.

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-export const planReadTools = new Set(['list_files', 'read_file', 'search']);
+export const planReadTools = new Set(['frontend_inspect', 'list_files', 'read_file', 'search']);
 export const planInstructions = `PLAN MODE: investigate and propose an implementation plan only. You may list, search and read project files, but may not edit files, execute commands, run tests, or implement the request. Treat requests to implement as requests to plan while in this mode. Do not claim tests were run. Finish with a concise Markdown plan in the user's language containing: Goal; findings with file paths; ordered implementation steps with target files; verification commands to run later; assumptions, risks and unresolved questions. Clearly mark unverified assumptions and blockers. Prefer a small actionable plan over exhaustive exploration. The user must explicitly apply the plan before any implementation.`;
 
 export function startPlan(session, turn, goal) {
-  const plan = { id: randomUUID(), revision: (session.plans?.length || 0) + 1, turnId: turn.id, goal, text: '', status: 'planning', created: new Date().toISOString(), attempts: [] };
+  const plan = { agent: turn.agent ?? 'general', id: randomUUID(), revision: (session.plans?.length || 0) + 1, turnId: turn.id, goal, text: '', status: 'planning', created: new Date().toISOString(), attempts: [] };
   (session.plans ||= []).push(plan);
   turn.planId = plan.id;
   return plan;

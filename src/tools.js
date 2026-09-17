@@ -1,3 +1,4 @@
+import { inspectFrontend } from './frontend.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -7,6 +8,7 @@ import { clip } from './context.js';
 const str = { type: 'string' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('frontend_inspect', 'Inspect frontend stack, scripts and bounded component/style/test paths without executing project code. Scope path to an app in monorepos.', { path: str }, []),
   tool('list_files', 'List project files, respecting Git ignore rules when Git is available. Use a subdirectory to narrow results.', { path: str }, []),
   tool('read_file', 'Read a bounded line range. Read a file before editing it.', { path: str, start: integer, lines: integer }, ['path']),
   tool('search', 'Find literal text in project files. Returns matching lines, capped at 60 hits.', { query: str, path: str }, ['query']),
@@ -14,7 +16,7 @@ export const toolDefinitions = [
   tool('write_file', 'Create a new file; never overwrite an existing file. Parent directory must exist.', { path: str, content: str }, ['path', 'content']),
   tool('shell', 'Run a shell command from the project root after permission. Working directory changes do not persist. Output and duration are bounded.', { command: str }, ['command'])
 ];
-const ignored = new Set(['.git', '.oscode', 'node_modules', '.venv', 'venv', '__pycache__', 'dist', 'build', 'coverage']);
+const ignored = new Set(['.git', '.oscode', 'node_modules', '.venv', 'venv', '__pycache__', 'dist', 'build', 'coverage', '.next', '.nuxt', '.output', '.svelte-kit', '.astro', 'storybook-static', 'playwright-report', 'test-results']);
 function excluded(name) {
   return name.split(/[\\/]/).some(p => ignored.has(p) || /^\.env(?:\.|$)/.test(p) || /\.(pem|key|p12)$/i.test(p) || p === 'id_rsa' || p === 'id_ed25519');
 }
@@ -112,6 +114,7 @@ export class WorkspaceTools {
     const mutates = ['edit_file', 'write_file', 'shell'].includes(name);
     if (mutates && this.readOnly) throw new Error('Plan mode allows only reading and searching.');
     if (mutates && this.permissions[name === 'shell' ? 'shell' : 'write'] === 'deny') throw new Error('Denied by project permissions.');
+    if (name === 'frontend_inspect') return inspectFrontend(this, input.path, signal);
     if (name === 'list_files') {
       const files = await this.files(input.path, signal);
       return files.join('\n') + `\n[${files.length} files listed; maximum 3000]`;
