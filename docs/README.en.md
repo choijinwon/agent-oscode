@@ -107,3 +107,7 @@ Use `oscode --agent frontend` for component, responsive layout and accessibility
 ## Integrated verification
 
 `oscode verify --changed --start dev --open` combines working-tree change analysis, configured scripts, managed dev-server startup, viewport diagnostics and a local HTML report. Shell approvals apply; unattended runs need `--allow-shell`. Skipped checks are not passes. Existing servers supplied by URL are not stopped. [Configuration and limits](verify.md).
+
+## Four frontend frameworks
+
+React, Vue, Angular and Svelte dependency detection and native starters are supported. Use `--component react/button`, `vue/card`, `angular/alert` or `svelte/pagination`. Native recipes target React 17+, Vue 3.2+, Angular 14+ standalone and Svelte 5. CLI generation blocks recognized framework/version mismatches. Storybook generation remains React-only and AST impact does not analyze SFC/template internals. [Support matrix](frameworks.md).

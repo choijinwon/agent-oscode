@@ -47,7 +47,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   --baseline NAME                  승인된 이미지와 비교
   --approve-baseline RUN_ID         검토한 UI 실행을 --baseline 이름으로 승인
   --architecture                   프론트엔드 구조·의존성 후보 진단 (API 불필요)
-  --component LIBRARY/NAME          mui·antd·bootstrap 컴포넌트 조회 (API 불필요)
+  --component LIBRARY/NAME          react·vue·angular·svelte 및 UI 라이브러리 조회 (API 불필요)
   --output PATH                    조회한 스타터를 새 파일로 생성 (--yes 필요)
   --ui-check URL                    위 명령과 동일; 페이지 JS/네트워크 실행
   --viewport all|mobile|tablet|desktop  진단 화면 크기 (기본 all)
@@ -177,10 +177,11 @@ async function main() {
     const [library, component, extra] = args.component.split('/');
     if (extra !== undefined) throw new Error('Use --component mui/button, antd/card or bootstrap/dropdown.');
     const recipe = componentRecipe(library, component);
-    const componentTools = new WorkspaceTools(root, { readOnly: config.plan, permissions: config.permissions, checkpoints, outputLimit: config.outputLimit, onPreview: print, approve: async () => Boolean(args.yes) });
+    const componentTools = new WorkspaceTools(root, { readOnly: config.plan, permissions: config.permissions, checkpoints, outputLimit: 16000, onPreview: print, approve: async () => Boolean(args.yes) });
     const report = await componentTools.execute('ui_component', { library, ...(component ? { component } : {}) });
     print(report.content); if (report.is_error) { process.exitCode = 1; return; }
     if (args.output) {
+      if (JSON.parse(report.content).compatible === false) throw new Error('Project framework/version is incompatible with this starter.');
       if (!component) throw new Error('Select a component before generating a file.');
       if (path.extname(args.output) !== recipe.extension) throw new Error(`Starter output requires ${recipe.extension}; adapt it to your project after generation.`);
       if (!args.yes) throw new Error('Review the starter above, then use --yes to create it.');
@@ -242,7 +243,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.8.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.9.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }

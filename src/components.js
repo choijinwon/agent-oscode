@@ -1,3 +1,4 @@
+import { nativeRecipe, detectFrameworks } from './frameworks.js';
 import path from 'node:path';
 
 // Small oscode-authored starters using public library APIs, not copied library source.
@@ -30,7 +31,9 @@ const recipes = {
   }
 };
 export function componentRecipe(library, component) {
-  if (!Object.hasOwn(libraries, library)) throw new Error('library must be mui, antd or bootstrap.');
+  const native = nativeRecipe(library, component);
+  if (native) return native;
+  if (!Object.hasOwn(libraries, library)) throw new Error('library must be react, vue, angular, svelte, mui, antd or bootstrap.');
   const info = libraries[library];
   if (!component) return { library, ...info, components: Object.keys(recipes[library]) };
   if (!Object.hasOwn(recipes[library], component)) throw new Error(`Unknown component. Choose: ${Object.keys(recipes[library]).join(', ')}.`);
@@ -44,8 +47,13 @@ export async function inspectComponent(tools, { library, component, path: direct
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) throw new Error('package.json must be an object.');
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const frameworks = detectFrameworks(deps);
+  const matched = frameworks.find(f => f.id === recipe.framework);
+  const version = matched ? /^[~^]?(\d+)(?:\.(\d+))?/.exec(matched.version) : null;
+  const major = version?.[1];
+  const incompatible = recipe.framework !== 'html' && ((frameworks.length > 0 && !matched) || (recipe.minimum && major && (Number(major) < recipe.minimum || (Number(major) === recipe.minimum && recipe.minimumMinor && Number(version[2] || 0) < recipe.minimumMinor))));
   const files = await tools.files(directory, signal);
-  const existing = files.filter(f => /\.(jsx|tsx|vue|svelte|html)$/.test(f) && (!component || path.basename(f).toLowerCase().includes(component))).slice(0, 12);
-  return JSON.stringify({ ...recipe, declaredVersion: deps[recipe.package] ?? null, missingPackages: recipe.packages.filter(p => !Object.hasOwn(deps, p)), reactDeclared: Object.hasOwn(deps, 'react'), existingCandidates: existing,
+  const existing = files.filter(f => /\.(jsx|tsx|ts|vue|svelte|html)$/.test(f) && (!component || path.basename(f).toLowerCase().includes(component))).slice(0, 12);
+  return JSON.stringify({ ...recipe, frameworks: frameworks.map(f => f.id), compatible: !incompatible, compatibility: incompatible ? 'Do not generate/apply: project framework or minimum major version does not match this starter.' : 'Check existing conventions and compiler compatibility before integration.', declaredVersion: deps[recipe.package] ?? null, missingPackages: recipe.packages.filter(p => !Object.hasOwn(deps, p)), reactDeclared: Object.hasOwn(deps, 'react'), existingCandidates: existing,
     caution: recipe.framework === 'react' && !Object.hasOwn(deps, 'react') ? 'React not declared here: do not apply this React recipe to Vue/Svelte/static HTML. Inspect the correct app directory.' : 'Dependency declarations do not confirm installed API compatibility. No packages were installed.' }, null, 2);
 }

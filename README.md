@@ -190,3 +190,7 @@ npm run check
 ## 프로젝트 통합 검증
 
 `oscode verify --changed --start dev --open`으로 변경 파일 분석, 구성된 검사 스크립트, 개발 서버 시작·준비 확인, 브라우저 검사와 로컬 HTML 보고서를 연결합니다. 실행 승인이 필요하며 생략/실패/통과를 별도로 기록합니다. [설정과 사용 범위](docs/verify.md).
+
+## 네 프레임워크 지원
+
+React·Vue·Angular·Svelte를 감지하고 각 문법에 맞는 네이티브 스타터 20개를 제공합니다. `--component vue/button`, `angular/card`, `svelte/alert`, `react/pagination`으로 조회하세요. [버전·호환성과 기능별 지원 범위](docs/frameworks.md).
