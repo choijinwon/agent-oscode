@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-43853d.svg)](https://nodejs.org/)
 
-**oscode is an open-source terminal AI coding agent for Claude and compatible LLM APIs.** It brings token budgets, streaming responses, code editing, usage analytics, file checkpoints and undo, and repeated-tool-call detection to a small, dependency-free Node.js CLI.
+**oscode is an open-source terminal AI coding agent for Claude and compatible LLM APIs.** It brings token budgets, streaming responses, code editing, usage analytics, file checkpoints and undo, and repeated-tool-call detection to a small Node.js CLI with optional Playwright browser diagnostics.
 
 **토큰 예산을 관리하는 오픈소스 터미널 AI 코딩 에이전트.**
 
@@ -19,7 +19,7 @@ node bin/oscode.js --demo
 The demo reads local project files without calling a model or requiring an API key. Live coding requires your own model credentials. This project is not affiliated with OpenCode, Pi, or Anthropic.
 
 
-토큰 예산을 관리하는 터미널 코딩 에이전트. 프로젝트에서 대화하며 파일을 탐색하고 수정하고 명령을 실행한다. Node.js 22 이상에서 외부 런타임 의존성 없이 동작한다.
+토큰 예산을 관리하는 터미널 코딩 에이전트. 프로젝트에서 대화하며 파일을 탐색하고 수정하고 명령을 실행한다. Node.js 22 이상에서 동작한다. 기본 에이전트는 외부 패키지 없이 사용할 수 있고 브라우저 진단은 선택 의존성 Playwright와 Chromium을 사용한다.
 
 OpenCode의 여러 모델 연결 방식, Pi의 작고 분리된 실행 코어, Claude 계열 도구의 탐색·편집·검증 흐름을 참고한 **독립 구현**이다. 원본 프로젝트 소스나 Claude Code를 합친 제품은 아니며, 현재 연결은 Anthropic Messages API와 Chat Completions 호환 API다.
 
@@ -174,3 +174,7 @@ npm run check
 ## 프론트엔드 전문 모드
 
 `oscode --agent frontend`로 UI 작업에 맞는 에이전트를 사용하세요. 스택·스크립트·컴포넌트 진단, 반응형·접근성·상태 처리 지침과 플랜 모드를 함께 제공합니다. `oscode --inspect-frontend`는 API 호출 없이 프로젝트를 진단합니다. [사용법과 검증 범위](docs/frontend.md).
+
+## 브라우저 UI 진단
+
+`oscode ui check http://localhost:3000`으로 모바일·태블릿·데스크톱 화면과 가로 넘침, 콘솔/네트워크 오류를 확인하세요. 진단은 모델 API 호출 없이 실행하고 결과를 로컬에 저장합니다. `--viewport mobile`로 수정한 화면만 재검사할 수 있습니다. [설치·사용법·검증 범위](docs/ui-check.md).

@@ -19,5 +19,6 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run check
+      - run: npx playwright install --with-deps chromium
       - run: npm test
       - run: node bin/oscode.js --demo

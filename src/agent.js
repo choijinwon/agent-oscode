@@ -42,7 +42,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
   let charged = 0;
   try {
     const system = await systemPrompt(session.root, config.plan, agent);
-    const definitions = toolDefinitions.filter(t => (agent === 'frontend' || t.name !== 'frontend_inspect') && (!config.plan || planReadTools.has(t.name)));
+    const definitions = toolDefinitions.filter(t => (agent === 'frontend' || !['frontend_inspect', 'ui_check'].includes(t.name)) && (!config.plan || planReadTools.has(t.name)));
     const enabled = new Set(definitions.map(t => t.name));
     for (let step = 0; step < config.maxSteps; step++) {
       if (signal.aborted) throw new Error('Cancelled.');

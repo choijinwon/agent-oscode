@@ -1,3 +1,4 @@
+import { checkUi, uiSummary, validateUiUrl } from './ui-check.js';
 import { inspectFrontend } from './frontend.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import { clip } from './context.js';
 const str = { type: 'string' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('ui_check', 'Open a user-provided HTTP(S) app URL in isolated Chromium; capture viewport screenshots, overflow and browser errors. Requires shell permission; BUILD only. Artifacts stored locally. Page JavaScript/network requests run.', { url: str, viewport: str }, ['url']),
   tool('frontend_inspect', 'Inspect frontend stack, scripts and bounded component/style/test paths without executing project code. Scope path to an app in monorepos.', { path: str }, []),
   tool('list_files', 'List project files, respecting Git ignore rules when Git is available. Use a subdirectory to narrow results.', { path: str }, []),
   tool('read_file', 'Read a bounded line range. Read a file before editing it.', { path: str, start: integer, lines: integer }, ['path']),
@@ -111,9 +113,16 @@ export class WorkspaceTools {
     } catch (error) { return { content: clip(`Error: ${error.message}`, this.outputLimit), is_error: true }; }
   }
   async perform(name, input, signal) {
-    const mutates = ['edit_file', 'write_file', 'shell'].includes(name);
+    const mutates = ['edit_file', 'write_file', 'shell', 'ui_check'].includes(name);
     if (mutates && this.readOnly) throw new Error('Plan mode allows only reading and searching.');
-    if (mutates && this.permissions[name === 'shell' ? 'shell' : 'write'] === 'deny') throw new Error('Denied by project permissions.');
+    if (mutates && this.permissions[['shell', 'ui_check'].includes(name) ? 'shell' : 'write'] === 'deny') throw new Error('Denied by project permissions.');
+    if (name === 'ui_check') {
+      validateUiUrl(input.url);
+      this.onPreview(`Browser UI check: ${input.url} (${input.viewport || 'all'}); runs page scripts and saves local artifacts.`);
+      if (!(await this.approve('shell', `Browser UI check: ${input.url}`, signal))) throw new Error('Browser execution denied.');
+      const report = await checkUi({ root: this.root, ...input, signal });
+      return uiSummary(report);
+    }
     if (name === 'frontend_inspect') return inspectFrontend(this, input.path, signal);
     if (name === 'list_files') {
       const files = await this.files(input.path, signal);

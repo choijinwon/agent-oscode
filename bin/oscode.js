@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { checkUi, uiSummary } from '../src/ui-check.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline/promises';
@@ -17,6 +18,7 @@ const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08
 const print = text => process.stdout.write(clean(text) + '\n');
 const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
 
+  oscode ui check URL               브라우저 화면 진단 (API 불필요)
   oscode --demo                     API 없이 읽기 전용 데모
   oscode --model MODEL               Claude API로 대화
   oscode --provider compatible --model MODEL
@@ -26,6 +28,8 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 설정:
   --cwd PATH                        프로젝트 폴더 (기본: 현재 폴더)
   --agent general|frontend          프론트엔드 전문 모드 (OSCODE_AGENT)
+  --ui-check URL                    위 명령과 동일; 페이지 JS/네트워크 실행
+  --viewport all|mobile|tablet|desktop  진단 화면 크기 (기본 all)
   --inspect-frontend                스택·스크립트·파일 진단 (API 불필요)
   --profile economy|balanced        기본: economy
   --model MODEL                     또는 OSCODE_MODEL
@@ -53,14 +57,16 @@ API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 
 명령: /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
-  const { values: args } = parseArgs({ options: Object.fromEntries([
-    ...['agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+  const raw = process.argv.slice(2);
+  const cliArgs = raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
+  const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
+    ...['ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
     ...['inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
@@ -71,6 +77,18 @@ async function main() {
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
   if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
+  if (args.viewport && !args['ui-check']) throw new Error('--viewport requires --ui-check or ui check.');
+  if (args['ui-check']) {
+    if (config.plan || config.permissions.shell === 'deny') throw new Error('Browser check is blocked by plan mode or shell permissions.');
+    const controller = new AbortController();
+    const cancel = () => controller.abort(); process.on('SIGINT', cancel);
+    try {
+      const report = await checkUi({ root, url: args['ui-check'], viewport: args.viewport || 'all', signal: controller.signal });
+      print(uiSummary(report));
+      if (report.incomplete) process.exitCode = 1; else if (report.findings) process.exitCode = 2;
+    } finally { process.removeListener('SIGINT', cancel); }
+    return;
+  }
   if (args['inspect-frontend']) {
     const result = await new WorkspaceTools(root, { readOnly: true, outputLimit: config.outputLimit }).execute('frontend_inspect', {});
     print(result.content); if (result.is_error) process.exitCode = 1; return;
@@ -132,7 +150,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.4.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.5.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }

@@ -6,7 +6,7 @@ It is an independent implementation inspired by terminal coding workflows in Ope
 
 ## Install and try the CLI
 
-Requires Node.js 22 or later. There are no runtime package dependencies.
+Requires Node.js 22 or later. Core agent features need no external packages; browser diagnostics use optional Playwright and Chromium.
 
 ```sh
 git clone https://github.com/choijinwon/agent-oscode.git
@@ -98,4 +98,4 @@ Tests include a local mock HTTP/SSE provider and do not require paid model calls
 
 ## Frontend specialist
 
-Use `oscode --agent frontend` for component, responsive layout and accessibility work. `--inspect-frontend` reports declared frameworks, package manager, available script names and bounded file samples without API calls or executing project scripts. Combine with `--plan`; approved plans retain their specialization. Switch with `/agent frontend|general`, or inspect a monorepo app with `/frontend apps/web`. Existing permissions and token limits apply. Browser/visual validation is not built in.
+Use `oscode --agent frontend` for component, responsive layout and accessibility work. `--inspect-frontend` reports declared frameworks, package manager, available script names and bounded file samples without API calls or executing project scripts. Combine with `--plan`; approved plans retain their specialization. Switch with `/agent frontend|general`, or inspect a monorepo app with `/frontend apps/web`. Existing permissions and token limits apply. Use `oscode ui check URL` for Chromium viewport screenshots, overflow candidates and browser errors (optional Playwright + Chromium required). It is an initial-load diagnostic, not complete visual/accessibility validation.
