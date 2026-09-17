@@ -103,3 +103,7 @@ Use `oscode --agent frontend` for component, responsive layout and accessibility
 ## Frontend quality workflow
 
 `ui check URL --scenario FILE --a11y` runs bounded saved steps and automated accessibility rules. Review PNGs before approving an immutable baseline using `--approve-baseline RUN_ID --baseline NAME`; compare with `ui check URL --baseline NAME`. Use `--tokens`, `--impact PATH`, and `--story PATH` for token candidates, AST reverse imports and React CSF stories. Story generation supports explicit state args and optional role/name visibility assertions. [Details and limits](frontend-quality.md). Optional dependencies are required for browser, AST and image analysis.
+
+## Integrated verification
+
+`oscode verify --changed --start dev --open` combines working-tree change analysis, configured scripts, managed dev-server startup, viewport diagnostics and a local HTML report. Shell approvals apply; unattended runs need `--allow-shell`. Skipped checks are not passes. Existing servers supplied by URL are not stopped. [Configuration and limits](verify.md).

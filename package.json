@@ -1,6 +1,6 @@
 {
   "name": "oscode",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Token-aware terminal AI coding agent for Claude and compatible LLM APIs, with usage analytics, file checkpoints, and loop detection.",
   "type": "module",
   "bin": {

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { verifyProject } from '../src/verify.js';
+import { pathToFileURL } from 'node:url';
+import { spawn } from 'node:child_process';
 import { approveBaseline } from '../src/ui-workflow.js';
 import { storyRecipe } from '../src/frontend-quality.js';
 import { componentRecipe } from '../src/components.js';
@@ -21,6 +24,9 @@ const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08
 const print = text => process.stdout.write(clean(text) + '\n');
 const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
 
+  oscode verify --changed           변경 사항 통합 검사·로컬 HTML 보고서
+  --start SCRIPT --url URL          개발 서버 시작 또는 기존 URL 검사
+  --open                           검증 후 HTML 결과 열기
   oscode ui check URL               브라우저 화면 진단 (API 불필요)
   oscode --demo                     API 없이 읽기 전용 데모
   oscode --model MODEL               Claude API로 대화
@@ -73,16 +79,18 @@ API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 
 `;
 async function main() {
   const raw = process.argv.slice(2);
-  const cliArgs = raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
+  const cliArgs = raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
-    ...['scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
+    ...['verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
+  if ((args.changed || args.start || args.url || args.open) && !args.verify) throw new Error('--changed/--start/--url/--open require verify.');
+  if (args.verify && (args.scenario || args.a11y || args.baseline || args.viewport)) throw new Error('Use ui check for scenario/a11y/baseline/viewport options.');
   if (args.output && !args.component && !args.story) throw new Error('--output requires --component or --story.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
   if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
@@ -93,6 +101,27 @@ async function main() {
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
   if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
+  if (args.verify) {
+    const controller = new AbortController();
+    const cancel = () => controller.abort(); process.on('SIGINT', cancel);
+    const terminal = process.stdin.isTTY && process.stdout.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
+    terminal?.on('SIGINT', cancel);
+    try {
+      const report = await verifyProject({ tools: new WorkspaceTools(root, { readOnly: true }), config, changed: args.changed, start: args.start, url: args.url, signal: controller.signal, emit: text => print(`→ ${text}`), approve: async (_kind, command, signal) => {
+        if (args['allow-shell']) return true;
+        print(command); if (!terminal) return false;
+        try { return /^y(?:es)?$/i.test((await terminal.question('실행 허용? [y/N] ', { signal })).trim()); } catch { return false; }
+      } });
+      print(JSON.stringify({ status: report.status, changed: report.changed, steps: report.steps.map(({ name, status, reason }) => ({ name, status, reason })), report: report.file, html: report.html, ...(config.plan ? { plan: report } : {}) }, null, 2));
+      process.exitCode = ['incomplete', 'cancelled'].includes(report.status) ? 1 : report.status === 'failed' ? 2 : 0;
+      if (args.open && report.html) {
+        const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? null : 'xdg-open';
+        if (!command) print(`결과 열기: ${report.html}`);
+        else { const child = spawn(command, [pathToFileURL(report.html).href], { stdio: 'ignore', detached: true }); child.on('error', () => print(`직접 열기: ${report.html}`)); child.unref(); }
+      }
+    } finally { terminal?.close(); process.removeListener('SIGINT', cancel); }
+    return;
+  }
   if ((args.scenario || args.a11y) && !args['ui-check']) throw new Error('--scenario/--a11y require ui check.');
   if (args.baseline && !args['ui-check'] && !args['approve-baseline']) throw new Error('--baseline requires ui check or --approve-baseline.');
   if ((args.states || args['story-role'] || args['story-name']) && !args.story) throw new Error('Story options require --story.');
@@ -176,7 +205,7 @@ async function main() {
   const interrupt = () => { if (active) active.abort(); else rl?.close(); };
   process.on('SIGINT', interrupt);
   rl?.on('SIGINT', interrupt);
-  const tools = new WorkspaceTools(root, { readOnly: config.plan, outputLimit: config.outputLimit, checkpoints, permissions: config.permissions,
+  const tools = new WorkspaceTools(root, { readOnly: config.plan, outputLimit: config.outputLimit, checkpoints, permissions: config.permissions, verifyOptions: config.verify,
     onPreview: print,
     approve: async (kind, target, signal) => {
       if (signal?.aborted) return false;
@@ -213,7 +242,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.7.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.8.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }

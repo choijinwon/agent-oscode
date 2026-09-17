@@ -1,3 +1,4 @@
+import { verifyProject } from './verify.js';
 import { inspectTokens, inspectImpact, storyRecipe } from './frontend-quality.js';
 import { inspectArchitecture } from './architecture.js';
 import { inspectComponent } from './components.js';
@@ -12,6 +13,7 @@ import { clip } from './context.js';
 const str = { type: 'string' }, bool = { type: 'boolean' }, integer = { type: 'integer' };
 const tool = (name, description, properties, required) => ({ name, description, parameters: { type: 'object', properties, required, additionalProperties: false } });
 export const toolDefinitions = [
+  tool('verify_project', 'Run configured project verification scripts and optional dev server/browser diagnostics; save local HTML/JSON report. BUILD only, shell approvals required. changed means working tree relative to HEAD.', { changed: bool, start: str, url: str }, []),
   tool('tailwind_tokens', 'Inspect bounded CSS tokens and literal arbitrary Tailwind utility candidates without executing configuration.', { path: str }, []),
   tool('frontend_impact', 'AST-based reverse import impact for a project source file, including root tsconfig aliases and re-exports; bounded candidate analysis.', { path: str }, ['path']),
   tool('storybook_recipe', 'Generate a React default-export CSF story recipe with optional JSON state args and role/name visibility assertions. Read-only; apply via file tools.', { path: str, states: str, role: str, name: str }, ['path']),
@@ -51,7 +53,8 @@ export function runCommand(command, args, { cwd, signal, timeout = 30000, maxByt
 }
 
 export class WorkspaceTools {
-  constructor(root, { approve = async () => false, readOnly = false, outputLimit = 6000, onPreview = () => {}, checkpoints = null, permissions = {} } = {}) {
+  constructor(root, { approve = async () => false, readOnly = false, outputLimit = 6000, onPreview = () => {}, checkpoints = null, permissions = {}, verifyOptions = {} } = {}) {
+    this.verifyOptions = verifyOptions;
     this.checkpoints = checkpoints; this.permissions = permissions;
     this.root = root; this.approve = approve; this.readOnly = readOnly; this.outputLimit = outputLimit; this.onPreview = onPreview; this.reads = new Map();
   }
@@ -121,9 +124,9 @@ export class WorkspaceTools {
     } catch (error) { return { content: clip(`Error: ${error.message}`, this.outputLimit), is_error: true }; }
   }
   async perform(name, input, signal) {
-    const mutates = ['edit_file', 'write_file', 'shell', 'ui_check'].includes(name);
+    const mutates = ['edit_file', 'write_file', 'shell', 'ui_check', 'verify_project'].includes(name);
     if (mutates && this.readOnly) throw new Error('Plan mode allows only reading and searching.');
-    if (mutates && this.permissions[['shell', 'ui_check'].includes(name) ? 'shell' : 'write'] === 'deny') throw new Error('Denied by project permissions.');
+    if (mutates && this.permissions[['shell', 'ui_check', 'verify_project'].includes(name) ? 'shell' : 'write'] === 'deny') throw new Error('Denied by project permissions.');
     if (name === 'ui_check') {
       validateUiUrl(input.url);
       this.onPreview(`Browser UI check: ${input.url} (${input.viewport || 'all'}); runs page scripts and saves local artifacts.`);
@@ -131,6 +134,10 @@ export class WorkspaceTools {
       const scenario = input.scenario ? JSON.parse(await this.text(await this.resolve(input.scenario))) : undefined;
       const report = await checkUi({ root: this.root, ...input, scenario, signal });
       return uiSummary(report);
+    }
+    if (name === 'verify_project') {
+      const report = await verifyProject({ tools: this, config: { verify: this.verifyOptions, permissions: this.permissions }, changed: input.changed ?? true, start: input.start, url: input.url, signal, approve: this.approve, emit: this.onPreview });
+      return JSON.stringify({ status: report.status, steps: report.steps.map(({ name, status, reason }) => ({ name, status, reason })), report: report.file, html: report.html });
     }
     if (name === 'tailwind_tokens') return inspectTokens(this, input.path, signal);
     if (name === 'frontend_impact') return inspectImpact(this, input.path, signal);

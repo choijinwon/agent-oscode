@@ -186,3 +186,7 @@ npm run check
 ## 프론트엔드 품질 워크플로
 
 저장된 시나리오 실행, 승인된 스크린샷 비교, axe 접근성 검사, Tailwind 토큰 진단, AST 변경 영향 분석, Storybook 상태·가시성 검증 스타터를 제공합니다. [사용법·예제·검사 범위](docs/frontend-quality.md).
+
+## 프로젝트 통합 검증
+
+`oscode verify --changed --start dev --open`으로 변경 파일 분석, 구성된 검사 스크립트, 개발 서버 시작·준비 확인, 브라우저 검사와 로컬 HTML 보고서를 연결합니다. 실행 승인이 필요하며 생략/실패/통과를 별도로 기록합니다. [설정과 사용 범위](docs/verify.md).
