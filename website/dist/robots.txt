@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://oscode-terminal.abyys9114.chatgpt.site/sitemap.xml

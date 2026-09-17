@@ -8,7 +8,7 @@
 
 **토큰 예산을 관리하는 오픈소스 터미널 AI 코딩 에이전트.**
 
-[English guide](docs/README.en.md) · [설정 가이드](docs/configuration.md) · [Architecture](docs/architecture.md) · [Issues](https://github.com/choijinwon/agent-oscode/issues)
+[Website / 소개 홈페이지](https://oscode-terminal.abyys9114.chatgpt.site) · [English guide](docs/README.en.md) · [설정 가이드](docs/configuration.md) · [Architecture](docs/architecture.md) · [Issues](https://github.com/choijinwon/agent-oscode/issues)
 
 ```sh
 git clone https://github.com/choijinwon/agent-oscode.git
