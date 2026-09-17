@@ -70,7 +70,16 @@ npx --package=github:choijinwon/agent-oscode oscode --demo
 npx --package=github:choijinwon/agent-oscode oscode --agent frontend --model YOUR_MODEL_ID
 ```
 
-현재 npm 레지스트리에는 아직 배포하지 않았습니다. 따라서 `npx oscode`나 `npm install -g oscode` 대신 위 GitHub 주소를 사용하세요. 브라우저 진단에는 Chromium 등 별도 준비가 필요합니다.
+npm에는 `@choijinwon/oscode`로 공개되어 있습니다. npm의 이름 유사성 정책으로 `oscode` 단독 이름은 사용할 수 없습니다.
+
+```sh
+npx @choijinwon/oscode --demo
+npx @choijinwon/oscode --agent frontend --model YOUR_MODEL_ID
+# 선택: 전역 설치 후 oscode 명령 사용
+npm install -g @choijinwon/oscode
+```
+
+브라우저 진단에는 Chromium 등 별도 준비가 필요합니다.
 
 ## 바로 실행
 

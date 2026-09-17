@@ -1,9 +1,9 @@
 # npm release
 
 The package already exposes `oscode` through `bin/oscode.js`.
-Once version 0.9.0 is successfully published to the public npm registry, users
-can run `npx oscode --demo` or `npx oscode --agent frontend --model MODEL`.
-These short commands are not available until publication is confirmed.
+Version 0.9.0 is published as `@choijinwon/oscode`. Users
+can run `npx @choijinwon/oscode --demo` or `npx @choijinwon/oscode --agent frontend --model MODEL`.
+The unscoped name was rejected by npm for similarity to existing packages.
 
 Publisher steps (Node.js 22 or newer):
 
@@ -21,10 +21,9 @@ additional browser/2FA verification at publish time. Never commit or share token
 Verify the published package rather than assuming a successful login published it:
 
 ```sh
-npm view oscode version repository.url --registry=https://registry.npmjs.org
-npx oscode --demo
+npm view @choijinwon/oscode version repository.url --registry=https://registry.npmjs.org
+npx @choijinwon/oscode --demo
 ```
 
 Each published version is immutable. Future releases require an updated version
-and lockfile. Until initial publication, the documented GitHub-package npx command
-remains available.
+and lockfile. The documented GitHub-package npx command also remains available.
