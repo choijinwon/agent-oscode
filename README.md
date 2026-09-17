@@ -62,7 +62,7 @@ node bin/oscode.js --provider compatible --base-url http://localhost:1234/v1 --m
 - 대화형 터미널과 단일 요청 실행, 실시간 텍스트 스트리밍.
 - 파일 목록, 리터럴 검색, 줄 범위 읽기, 정확히 한 번 일치하는 부분 편집, 새 파일 생성.
 - 편집 전 읽기와 변경 감지, 변경 내용 미리보기, 셸 실행 승인과 30초 제한.
-- 읽기 전용 `--plan`, 실행 중 Ctrl+C 취소.
+- 플랜 모드: 조사·단계별 계획 저장, `/plan` 전환, `/apply` 확인 후 구현. 실행 중 Ctrl+C 취소.
 - 프로젝트 루트의 `AGENTS.md` 읽기: 최대 8,000바이트. 하위 폴더의 지침은 자동 탐색하지 않는다.
 - 세션 저장·재개, 모델 변경, Git diff 확인.
 - 작업별 토큰 예산, API 사용량 및 캐시 토큰 표시, 오래된 문맥 정리.
@@ -104,6 +104,11 @@ node bin/oscode.js --model YOUR_MODEL_ID --max-input 16000 --max-output 2500 --m
 | 명령 | 동작 |
 | --- | --- |
 | `/help` | 사용법 |
+| `/plan` 또는 `/plan on` | 플랜 모드로 전환, 다음 요청부터 계획만 작성 |
+| `/plan 요청내용` | 플랜 모드로 전환하고 해당 요청의 계획 작성 |
+| `/plan show` / `/plan list` | 최신 계획 / 계획 이력 확인 (모델 호출 없음) |
+| `/plan off` | 구현 모드로 전환, 저장된 계획은 자동 실행하지 않음 |
+| `/apply` | 최신 계획을 표시하고 확인 후 구현 시작 |
 | `/usage` 또는 `/usage all` | 누적·모델별 사용량, 입력 구성 추정, 최근 5개 또는 전체 요청 비용 |
 | `/compact` | 최신 턴을 유지하고 과거 턴을 입력에서 제외 |
 | `/model MODEL` | 현재 공급자 내 다음 요청 모델 변경 |
@@ -114,6 +119,18 @@ node bin/oscode.js --model YOUR_MODEL_ID --max-input 16000 --max-output 2500 --m
 | `/config` | 현재 적용된 설정 |
 | `/test` | 프로젝트의 testCommand 실행 (셸 권한 적용) |
 | `/exit` | 종료 |
+
+## 플랜 모드로 먼저 설계하기
+
+```sh
+node bin/oscode.js --model YOUR_MODEL_ID --plan --prompt '로그인 기능 리팩터링 계획을 세워줘'
+node bin/oscode.js --resume latest --show-plan
+node bin/oscode.js --model YOUR_MODEL_ID --resume latest --apply-plan
+```
+
+플랜 모드에서는 파일 검색·읽기만 수행하고 목표, 조사 결과, 수정 단계, 검증 방법과 미확인 사항을 계획으로 저장한다. `/apply`에서 계획을 확인하고 실행에 동의하면 구현 모드로 전환된다. 비대화형 `--apply-plan` 자체는 저장된 계획 실행에 대한 명시적 승인이다. 파일·셸 권한은 별도이며 자동으로 허용되지 않는다.
+
+계획은 대화 문맥 정리 후에도 세션에 남는다. 계획 작성에는 모델 토큰이 사용되지만 조회와 모드 전환에는 모델을 호출하지 않는다. 자세한 흐름과 제한은 [플랜 모드 가이드](docs/planning.md)를 참고한다.
 
 ## 프로젝트 설정·사용량·되돌리기
 

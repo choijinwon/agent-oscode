@@ -39,7 +39,7 @@ The server/model must support tool calls and the implemented Chat Completions st
 
 - Streaming terminal conversation and one-shot prompts.
 - Project file listing, literal search, line-range reading, exact replacement, and new-file creation.
-- Read-only plan mode, permission prompts, shell timeout, and cancellation.
+- Plan mode with saved implementation plans, interactive mode switching, explicit apply, permission prompts, shell timeout, and cancellation.
 - Saved sessions with resume, context trimming, and archived original tool results.
 - Per-turn token budgets and configurable input, output, and step limits.
 - Per-request and per-model usage, cache accounting, context composition estimates, and optional price-based USD estimates.
@@ -60,6 +60,18 @@ node bin/oscode.js --resume latest --undo latest
 Maintenance commands do not need model credentials. `oscode.json` can set `profile`, `provider`, `model`, `baseUrl`, `budget`, `maxInput`, `maxOutput`, `maxSteps`, `loopLimit`, `testCommand`, and `permissions`. CLI options override environment settings, which override project settings; profiles supply unspecified defaults. Project `deny` permissions and read-only mode remain enforced.
 
 Optional `pricing` entries are keyed by provider and exact model ID, with `input`, `output`, `cacheRead`, and `cacheWrite` rates in USD per million tokens. Missing prices are reported as unpriced, never as zero. Prices are user-supplied estimates, not live billing data. See the [configuration reference](configuration.md).
+
+## Plan before implementation
+
+```sh
+node bin/oscode.js --model YOUR_MODEL_ID --plan --prompt 'Plan a login refactor'
+node bin/oscode.js --resume latest --show-plan
+node bin/oscode.js --model YOUR_MODEL_ID --resume latest --apply-plan
+```
+
+In a conversation, `/plan` enters plan mode, `/plan TASK` investigates and drafts a plan, and `/plan show` displays it without a model call. `/apply` shows the latest plan and asks for confirmation before implementation. `/plan off` changes mode without executing the plan. Plans survive compaction and session resume. Existing project `plan: true` restrictions cannot be bypassed by apply.
+
+The noninteractive `--apply-plan` flag explicitly authorizes starting the selected saved plan; it does not grant file or shell permissions. See the [plan-mode guide](planning.md).
 
 ## Interactive commands
 

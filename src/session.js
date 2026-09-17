@@ -43,6 +43,11 @@ export async function loadSession(root, id) {
     for (const call of turn.messages.flatMap(m => m.tool_calls || [])) {
       if (!completed.has(call.id)) turn.messages.push({ role: 'tool', tool_call_id: call.id, is_error: true, content: 'Execution was interrupted. This result is unknown; inspect files and checkpoints before acting. Do not assume the operation was not executed.' });
     }
+    const plan = session.plans?.find(p => p.id === (turn.executionPlanId || turn.planId));
+    if (plan) {
+      plan.status = turn.executionPlanId ? 'interrupted' : 'failed';
+      if (turn.executionPlanId && plan.attempts?.length) plan.attempts.at(-1).status = 'interrupted';
+    }
     turn.status = 'interrupted';
     turn.messages.push({ role: 'user', content: '[oscode resumed after interrupted execution. Verify current files; do not automatically repeat mutations.]' });
   }

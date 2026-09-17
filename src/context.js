@@ -30,7 +30,10 @@ export function compact(session, keep = 2) {
   return remove;
 }
 export function buildMessages(session) {
-  const messages = session.turns.flatMap(t => t.messages);
+  const selectedPlan = session.turns.at(-1)?.executionPlanId;
+  // The approved plan is embedded in the current execution request. Do not
+  // resend its planning turn and exploration outputs as duplicate context.
+  const messages = session.turns.filter(t => !selectedPlan || t.planId !== selectedPlan).flatMap(t => t.messages);
   if (!session.omitted) return messages;
   return [{ role: 'user', content: `Historical turns were omitted to save tokens (${session.omitted}). These are user-request excerpts, NOT verified results. Re-read files when needed.\n${session.memory}` },
     { role: 'assistant', content: 'I will verify the current files rather than assume prior work succeeded.' }, ...messages];

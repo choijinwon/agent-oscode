@@ -11,6 +11,7 @@ import { compact } from '../src/context.js';
 import { readProjectConfig, resolveConfig, initConfig } from '../src/config.js';
 import { usageText, usageReport } from '../src/usage.js';
 import { Checkpoints } from '../src/checkpoints.js';
+import { renderPlan, getApplicablePlan, planExecutionPrompt, switchMode } from '../src/plans.js';
 
 const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
 const print = text => process.stdout.write(clean(text) + '\n');
@@ -32,7 +33,9 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   --max-input N                     요청 입력 추정 한도
   --max-output N                    응답 토큰 한도
   --max-steps N                     모델 호출 횟수 한도
-  --plan                            읽기·검색만 허용
+  --plan                            조사 후 구현 계획 작성·저장 (변경 금지)
+  --show-plan                       저장된 최신 계획 확인 (API 불필요)
+  --apply-plan                      저장된 최신 계획 실행 (명시적 승인)
   --yes                             파일 편집·생성 자동 허용
   --allow-shell                     셸 자동 허용 (프로젝트 밖 접근도 가능)
   --loop-limit N                    동일 결과 반복 감지 한도 (기본 3)
@@ -45,23 +48,29 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
-명령: /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
+명령: /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
   const { values: args } = parseArgs({ options: Object.fromEntries([
     ...['cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config'].map(k => [k, { type: 'boolean' }])
+    ...['help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['init', 'usage', 'checkpoints', 'config', 'undo'].filter(key => args[key] !== undefined);
-  if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo))) throw new Error('Choose one maintenance action without --prompt or --demo.');
+  const maintenance = ['init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  if (maintenance.length > 1 || (maintenance.length && (args.prompt || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if (args.init) { await initConfig(root); print('oscode.json 생성 완료. 모델과 예산을 설정할 수 있습니다.'); return; }
-  const config = resolveConfig(await readProjectConfig(root), args);
-  if (args.config) { print(JSON.stringify(config, null, 2)); return; }
-  const readSaved = args.resume || (args.usage || args.checkpoints || args.undo ? 'latest' : null);
+  if (args['apply-plan'] && (args.plan || args.prompt || args.demo)) throw new Error('--apply-plan은 --plan, --prompt, --demo와 함께 사용할 수 없습니다.');
+  const project = await readProjectConfig(root);
+  const config = resolveConfig(project, args);
+  const planLocked = Boolean(project.plan || args.demo);
+  const readSaved = args.resume || (args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
+  if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
+  if (args.config) { print(JSON.stringify(config, null, 2)); return; }
+  if (args['show-plan']) { print(renderPlan(session)); return; }
+  if (args['apply-plan']) getApplicablePlan(session, { locked: planLocked });
   const checkpoints = new Checkpoints(session);
   const undo = async id => {
     if (config.plan || config.permissions.write === 'deny') throw new Error('현재 모드/권한에서 되돌리기를 허용하지 않습니다.');
@@ -97,23 +106,47 @@ async function main() {
     if (kind === 'tool') print(`  → ${data.name}${data.input?.path ? ` ${data.input.path}` : ''}`);
     if (kind === 'result') print(data.content);
   };
-  const execute = async prompt => {
+  const execute = async (prompt, executionPlan = null) => {
     active = new AbortController();
-    try { await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession }); }
-    catch (e) { print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo) process.exitCode = 1; }
-    finally { active = null; print(usageText(session.turns.at(-1).usage)); }
+    try { await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
+    catch (e) { print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
+    finally { active = null; if (session.turns.length) print(usageText(session.turns.at(-1).usage)); }
   };
-  print(`oscode 0.2.0 · ${config.provider}/${config.model} · ${config.profile}${config.plan ? ' · 읽기 전용' : ''}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  const apply = async (confirmed = false) => {
+    const plan = getApplicablePlan(session, { locked: planLocked });
+    print(renderPlan(session));
+    if (!confirmed) {
+      if (!rl) throw new Error('비대화형 실행은 --apply-plan을 사용하세요.');
+      let answer;
+      try { answer = await rl.question(`계획 r${plan.revision}을 실행할까요? [y/N] `); } catch { return; }
+      if (!/^y(?:es)?$/i.test(answer.trim())) { print('계획 실행을 취소했습니다.'); return; }
+    }
+    print(switchMode(config, tools, session, false, planLocked));
+    await execute(planExecutionPrompt(plan), plan);
+  };
+  print(`oscode 0.3.0 · ${config.provider}/${config.model} · ${config.profile}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
+    if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
     if (args.prompt) { await execute(args.prompt); return; }
     if (!rl) throw new Error('비대화형 실행은 --prompt를 지정하세요.');
     print('/help 명령 목록 · Ctrl+C 실행 취소');
     while (!rl.closed) {
       let input;
-      try { input = (await rl.question('\noscode › ')).trim(); } catch { break; }
+      try { input = (await rl.question(`\noscode [${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;
+      if (input === '/plan show' || input === '/plan list') { print(renderPlan(session, input === '/plan list')); continue; }
+      if (input === '/apply') { try { await apply(); } catch (error) { print(error.message); } continue; }
+      if (input === '/plan' || input.startsWith('/plan ')) {
+        const request = input.slice(5).trim();
+        try {
+          print(switchMode(config, tools, session, request !== 'off', planLocked));
+          await saveSession(session);
+          if (request && !['on', 'off'].includes(request)) await execute(request);
+        } catch (error) { print(error.message); }
+        continue;
+      }
       if (input === '/help') { print(help); continue; }
       if (input === '/usage' || input === '/usage all') { print(usageReport(session, input === '/usage all')); continue; }
       if (input === '/config') { print(JSON.stringify(config, null, 2)); continue; }
