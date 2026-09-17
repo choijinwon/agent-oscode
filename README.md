@@ -53,6 +53,25 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 저장된 답변은 `node bin/oscode.js --copy-last`로 API 호출 없이 복사할 수 있습니다. [운영체제별 지원과 사용법](docs/clipboard.md)
 
+## npm으로 실행
+
+Node.js 22 이상이 필요합니다. 저장소 안에서는 다음 명령을 사용할 수 있습니다.
+
+```sh
+npm run demo
+npm run frontend -- --model YOUR_MODEL_ID
+npm start -- --plan --prompt '프로젝트 구조를 분석해줘'
+```
+
+저장소를 직접 복제하지 않고 현재 폴더를 분석하려면 GitHub 패키지를 실행하세요. Git이 설치되어 있어야 하며, 첫 실행에 npm이 패키지 설치 여부를 물을 수 있습니다.
+
+```sh
+npx --package=github:choijinwon/agent-oscode oscode --demo
+npx --package=github:choijinwon/agent-oscode oscode --agent frontend --model YOUR_MODEL_ID
+```
+
+현재 npm 레지스트리에는 아직 배포하지 않았습니다. 따라서 `npx oscode`나 `npm install -g oscode` 대신 위 GitHub 주소를 사용하세요. 브라우저 진단에는 Chromium 등 별도 준비가 필요합니다.
+
 ## 바로 실행
 
 ```sh

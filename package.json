@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node bin/oscode.js",
     "test": "node --test",
-    "check": "node scripts/check.js"
+    "check": "node scripts/check.js",
+    "demo": "node bin/oscode.js --demo",
+    "frontend": "node bin/oscode.js --agent frontend"
   },
   "engines": {
     "node": ">=22"
