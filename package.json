@@ -29,7 +29,7 @@
     "type": "git",
     "url": "https://github.com/choijinwon/agent-oscode.git"
   },
-  "homepage": "https://oscode-terminal.abyys9114.chatgpt.site",
+  "homepage": "https://agent-oscode.netlify.app",
   "bugs": {
     "url": "https://github.com/choijinwon/agent-oscode/issues"
   },
