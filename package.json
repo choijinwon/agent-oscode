@@ -1,0 +1,47 @@
+{
+  "name": "oscode",
+  "version": "0.2.0",
+  "description": "Token-aware terminal AI coding agent for Claude and compatible LLM APIs, with usage analytics, file checkpoints, and loop detection.",
+  "type": "module",
+  "bin": {
+    "oscode": "bin/oscode.js"
+  },
+  "scripts": {
+    "start": "node bin/oscode.js",
+    "test": "node --test",
+    "check": "node scripts/check.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE",
+    "docs",
+    "scripts",
+    "test"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/choijinwon/agent-oscode.git"
+  },
+  "homepage": "https://github.com/choijinwon/agent-oscode#readme",
+  "bugs": {
+    "url": "https://github.com/choijinwon/agent-oscode/issues"
+  },
+  "keywords": [
+    "ai-coding-agent",
+    "terminal",
+    "cli",
+    "claude",
+    "anthropic",
+    "llm",
+    "token-budget",
+    "developer-tools",
+    "checkpoints",
+    "nodejs"
+  ]
+}
