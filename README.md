@@ -36,6 +36,17 @@ node bin/oscode.js --ab-context src/components/Card.vue --prompt '개선 계획'
 
 기본 A/B는 API 없이 입력 추정치를 비교합니다. `--ab-live --model YOUR_MODEL_ID`를 추가하면 같은 스냅샷을 동일 모델에 두 번 보내 사용량·응답 시간을 기록합니다. 코드 수정·테스트 성공률은 평가하지 않습니다. [범위, 예산과 결과 해석](docs/frontend-token-ab.md)
 
+## 긴 분석 이어가기
+
+분석 체크포인트는 읽은 코드의 인용문, 해석, 다음 질문을 세션에 저장합니다. 대화를 압축해도 최근 4개 메모가 남고, 파일이 바뀌면 이전 결론을 무효화합니다. 같은 코드가 대화에 남아 있으면 중복 읽기 출력도 줄입니다.
+
+```sh
+node bin/oscode.js --analysis-notes
+node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체크포인트를 확인하고 이어서 진행해줘'
+```
+
+[분석 체크포인트 사용법과 한계](docs/analysis-checkpoints.md)
+
 ## 바로 실행
 
 ```sh

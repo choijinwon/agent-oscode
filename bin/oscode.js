@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { analysisCheckpointContext } from '../src/analysis-memory.js';
 import { compareFrontendContext, frontendContext } from '../src/frontend-context.js';
 import { verifyProject } from '../src/verify.js';
 import { pathToFileURL } from 'node:url';
@@ -36,6 +37,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 설정:
+  --analysis-notes                  저장된 분석 근거·다음 질문 확인 (API 불필요)
   --frontend-context PATH           컴포넌트와 직접 의존성 컨텍스트 확인
   --context-mode focused|standard   프론트엔드 컨텍스트·출력 요약 (기본 focused)
   --ab-context PATH                 A/B 입력 토큰 추정 비교·JSON 저장
@@ -87,13 +89,13 @@ async function main() {
   const cliArgs = raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
     ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args['ab-live'] && !args['ab-context']) throw new Error('--ab-live requires --ab-context.');
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['analysis-notes', 'frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && ((args.prompt && !args['ab-context']) || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if ((args.changed || args.start || args.url || args.open) && !args.verify) throw new Error('--changed/--start/--url/--open require verify.');
   if (args.verify && (args.scenario || args.a11y || args.baseline || args.viewport)) throw new Error('Use ui check for scenario/a11y/baseline/viewport options.');
@@ -117,7 +119,7 @@ async function main() {
     return;
   }
   const planLocked = Boolean(project.plan || args.demo);
-  const readSaved = args.resume || (args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
+  const readSaved = args.resume || (args['analysis-notes'] || args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
   if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
@@ -215,6 +217,7 @@ async function main() {
     const result = await checkpoints.undo(id);
     print(result);
   };
+  if (args['analysis-notes']) { print(await analysisCheckpointContext(new WorkspaceTools(root, { readOnly: true }), session) || '저장된 분석 체크포인트가 없습니다.'); return; }
   if (args.usage) { print(usageReport(session, true)); return; }
   if (args.checkpoints) { print(checkpoints.list()); return; }
   if (args.undo) { await undo(args.undo); return; }

@@ -1,3 +1,4 @@
+import { analysisCheckpointContext, elideDuplicateRead } from './analysis-memory.js';
 import { summarizeDiagnostics } from './frontend-context.js';
 import { frontendInstructions } from './frontend.js';
 import fs from 'node:fs/promises';
@@ -25,6 +26,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
   if (executionPlan && config.plan) throw new Error('Cannot apply a plan while read-only mode is active.');
   const agent = executionPlan?.agent ?? config.agent ?? 'general';
   session.agent = agent;
+  tools.analysisSession = session;
   const focused = agent === 'frontend' && config.contextMode !== 'standard';
   const turn = { contextMode: focused ? 'focused' : 'standard', agent, mode: config.plan ? 'plan' : 'build', id: randomUUID(), requests: [], messages: [{ role: 'user', content: prompt }], usage: emptyUsage(), status: 'running' };
   if (session.workspaceNotes?.length) {
@@ -43,11 +45,12 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
   const guard = new LoopGuard(config.loopLimit ?? 3);
   let charged = 0;
   try {
-    const system = await systemPrompt(session.root, config.plan, agent) + (focused ? '\nFor a component task, start with frontend_context for that source file. Prefer existing imported components/design tokens. Expand missing dependencies only when needed. Never infer correctness from a shortened diagnostic. Read exact source before editing.' : '');
+    const baseSystem = await systemPrompt(session.root, config.plan, agent) + (focused ? '\nFor a component task, start with frontend_context for that source file. Prefer existing imported components/design tokens. Expand missing dependencies only when needed. Never infer correctness from a shortened diagnostic. Read exact source before editing.' : '');
     const definitions = toolDefinitions.filter(t => (t.name !== 'frontend_context' || focused) && (agent === 'frontend' || !['frontend_inspect', 'ui_check', 'ui_component', 'frontend_architecture', 'tailwind_tokens', 'frontend_impact', 'storybook_recipe', 'verify_project'].includes(t.name)) && (!config.plan || planReadTools.has(t.name)));
     const enabled = new Set(definitions.map(t => t.name));
     for (let step = 0; step < config.maxSteps; step++) {
       if (signal.aborted) throw new Error('Cancelled.');
+      const system = baseSystem + '\nFor long analysis, use analysis_checkpoint to retain a concise interpretation, a literal source quote and a next question before exploring further. Saved notes are unverified; changed sources must be re-read.' + await analysisCheckpointContext(tools, session);
       let messages = buildMessages(session);
       let estimate = estimateTokens({ system, messages, tools: definitions }) + 256;
       while (estimate > config.maxInput && session.turns.length > 1) {
@@ -105,6 +108,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
           ? { content: 'Not executed: cancelled or turn budget exhausted.', is_error: true }
           : await tools.execute(call.name, call.input, signal);
         if (!loopStop) { guard.observe(call, result); loopStop = guard.failureReason(); }
+        elideDuplicateRead(session, turn, call, result);
         if (focused && call.name === 'shell' && result.content.length > 2400) {
           (turn.toolArchive ||= []).push({ index: turn.messages.length, message: { role: 'tool', tool_call_id: call.id, ...result } });
           result.content = summarizeDiagnostics(result.content);
