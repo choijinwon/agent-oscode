@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { accessClipboard, lastAnswer, PasteDraft } from '../src/clipboard.js';
+import { estimateTokens } from '../src/context.js';
 import { analysisCheckpointContext } from '../src/analysis-memory.js';
 import { compareFrontendContext, frontendContext } from '../src/frontend-context.js';
 import { verifyProject } from '../src/verify.js';
@@ -37,6 +39,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 설정:
+  --copy-last                      저장된 마지막 완료 답변을 클립보드로 복사
   --analysis-notes                  저장된 분석 근거·다음 질문 확인 (API 불필요)
   --frontend-context PATH           컴포넌트와 직접 의존성 컨텍스트 확인
   --context-mode focused|standard   프론트엔드 컨텍스트·출력 요약 (기본 focused)
@@ -82,6 +85,8 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
+복사·붙여넣기: /copy [code] /paste /draft /send /clear
+/paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
 명령: /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
@@ -89,13 +94,13 @@ async function main() {
   const cliArgs = raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
     ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (args['ab-live'] && !args['ab-context']) throw new Error('--ab-live requires --ab-context.');
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
-  const maintenance = ['analysis-notes', 'frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
+  const maintenance = ['copy-last', 'analysis-notes', 'frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && ((args.prompt && !args['ab-context']) || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
   if ((args.changed || args.start || args.url || args.open) && !args.verify) throw new Error('--changed/--start/--url/--open require verify.');
   if (args.verify && (args.scenario || args.a11y || args.baseline || args.viewport)) throw new Error('Use ui check for scenario/a11y/baseline/viewport options.');
@@ -119,7 +124,7 @@ async function main() {
     return;
   }
   const planLocked = Boolean(project.plan || args.demo);
-  const readSaved = args.resume || (args['analysis-notes'] || args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
+  const readSaved = args.resume || (args['copy-last'] || args['analysis-notes'] || args.usage || args.checkpoints || args.undo || args['show-plan'] || args['apply-plan'] ? 'latest' : null);
   const session = readSaved ? await loadSession(root, readSaved) : newSession(root);
   if (session.mode === 'plan' && !args['apply-plan']) config.plan = true;
   if (!args.agent && !process.env.OSCODE_AGENT && !project.agent && ['general', 'frontend'].includes(session.agent)) config.agent = session.agent;
@@ -217,12 +222,14 @@ async function main() {
     const result = await checkpoints.undo(id);
     print(result);
   };
+  if (args['copy-last']) { await accessClipboard('write', lastAnswer(session)); print('마지막 완료 답변을 클립보드에 복사했습니다.'); return; }
   if (args['analysis-notes']) { print(await analysisCheckpointContext(new WorkspaceTools(root, { readOnly: true }), session) || '저장된 분석 체크포인트가 없습니다.'); return; }
   if (args.usage) { print(usageReport(session, true)); return; }
   if (args.checkpoints) { print(checkpoints.list()); return; }
   if (args.undo) { await undo(args.undo); return; }
   if (config.provider !== 'demo' && !config.model) throw new Error('모델을 지정하세요: --model MODEL 또는 OSCODE_MODEL. 무료 데모: --demo');
   const provider = createProvider(config);
+  const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
   let active;
@@ -278,6 +285,25 @@ async function main() {
       try { input = (await rl.question(`\noscode [${config.agent}/${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;
+      if (input === '/copy' || input === '/copy code') {
+        try { await accessClipboard('write', lastAnswer(session, input === '/copy code')); print('클립보드에 복사했습니다.'); }
+        catch (error) { print(error.message); }
+        continue;
+      }
+      if (input === '/paste') {
+        try {
+          if (pasteDraft.text) { print('기존 초안이 있습니다. /send 또는 /clear 후 다시 붙여넣으세요.'); continue; }
+          const text = pasteDraft.load(await accessClipboard('read'));
+          print(`붙여넣기 초안: ${text.split('\n').length}줄 · 입력 추정 ${estimateTokens(text)} tokens. /draft 확인 · /send 전송 · /clear 취소`);
+        } catch (error) { print(error.message); }
+        continue;
+      }
+      if (input === '/draft') { print(pasteDraft.text || '붙여넣기 초안이 없습니다.'); continue; }
+      if (input === '/clear') { pasteDraft.clear(); print('붙여넣기 초안을 지웠습니다.'); continue; }
+      if (input === '/send') {
+        try { await execute(pasteDraft.take()); } catch (error) { print(error.message); }
+        continue;
+      }
       if (input === '/plan show' || input === '/plan list') { print(renderPlan(session, input === '/plan list')); continue; }
       if (input === '/apply') { try { await apply(); } catch (error) { print(error.message); } continue; }
       if (input === '/plan' || input.startsWith('/plan ')) {

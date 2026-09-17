@@ -47,6 +47,12 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 [분석 체크포인트 사용법과 한계](docs/analysis-checkpoints.md)
 
+## 복사·붙여넣기
+
+대화 중 `/paste`로 클립보드의 여러 줄 코드·로그를 초안에 담고, `/draft`로 확인한 뒤 `/send`로 한 번에 전송합니다. `/clear`로 취소할 수 있습니다. `/copy`는 마지막 완료 답변을, `/copy code`는 코드 블록만 복사합니다.
+
+저장된 답변은 `node bin/oscode.js --copy-last`로 API 호출 없이 복사할 수 있습니다. [운영체제별 지원과 사용법](docs/clipboard.md)
+
 ## 바로 실행
 
 ```sh
