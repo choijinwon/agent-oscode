@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {deliveryReview,reviewText,reviewVerdict} from '../src/delivery-review.js';
 import {taskReport,exportHandoff} from '../src/task-report.js';
 import {repositoryMap} from '../src/repository-map.js';
 import {ApprovalMode} from '../src/approval-mode.js';
@@ -298,6 +299,7 @@ async function main(raw = process.argv.slice(2), host) {
     const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.plan?['--plan']:[])];
     screen=host?host.createUI(uiOptions,childArgs):new ConsoleUI(uiOptions);
     if(readSaved)screen.restoreSession(session);
+    if(session.latestReview){screen.reviewLabel=reviewVerdict(session.latestReview).label+' · 이전 검사';screen.render();}
 
   }
   const rl = screen || (interactive ? createChatConsole() : null);
@@ -318,6 +320,7 @@ async function main(raw = process.argv.slice(2), host) {
   });
   const originalPerform=tools.perform.bind(tools);
   tools.perform=async(name,input,signal)=>{
+    if(screen&&screen.reviewLabel&&['write_file','edit_file','shell','verify_project'].includes(name)){screen.reviewLabel='작업 변경 · 재검사 필요';screen.render();}
     const result=await originalPerform(name,input,signal);
     if(['write_file','edit_file'].includes(name)){
       const before=name==='write_file'?'':input.old_text,after=name==='write_file'?input.content:input.new_text;
@@ -436,6 +439,19 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if(input==='/review'||input.startsWith('/review ')){
+        const target=input.slice(7).trim();
+        if(target==='show'){print(session.latestReview?reviewText(session.latestReview):'검증 기록이 없습니다. /review를 실행하세요.');continue;}
+        active=new AbortController();screen?.setStage('프론트엔드 검증 중');
+        if(screen)screen.reviewLabel='검증 진행 중';
+        try{
+          const run=()=>deliveryReview({tools,config,url:target||undefined,signal:active.signal,emit:message=>screen?screen.setStage(message):print(message)});
+          const report=await (host?host.exclusive(root,run,active.signal):run());
+          session.latestReview=report;await saveSession(session);print(reviewText(report));
+          if(screen)screen.reviewLabel=reviewVerdict(report).label+' · 검사 당시';
+        }catch(error){print(`검증 중단: ${error.message}`);if(screen)screen.reviewLabel='검증 중단 · 다시 실행 필요';}
+        finally{active=null;screen?.setStage('대기');}continue;
       }
       if(input==='/summary'){print(taskReport(session));continue;}
       if(input==='/handoff'||input==='/handoff copy'){

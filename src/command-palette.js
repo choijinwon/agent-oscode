@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/review', '변경 파일·프로젝트 검사·반응형·접근성 검증'], ['/review show', '마지막 검증 결과 보기'],
   ['/summary', '작업 결과·도구 실행 근거 확인'], ['/handoff', '작업 인계 파일 저장'], ['/handoff copy', '작업 인계 내용 복사'],
   ['/map', '관련 파일·함수·컴포넌트 코드 지도'],
   ['/approval', '나 대신 승인·자동 승인·나에게 묻기 선택'],

@@ -299,9 +299,9 @@ export class ConsoleUI extends EventEmitter {
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
     if(action==='mode'){this.emit('toggleMode');this.render();return;}
-    if(action==='settings'||action==='preview'||action==='skills'||action==='style'||action==='approval') {
+    if(action==='settings'||action==='preview'||action==='skills'||action==='style'||action==='approval'||action==='review'||action==='reviewshow') {
       const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
-      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':action==='style'?'/style':action==='approval'?'/approval':'/settings');Object.assign(this,draft);this.render();
+      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':action==='style'?'/style':action==='approval'?'/approval':action==='review'?'/review':action==='reviewshow'?'/review show':'/settings');Object.assign(this,draft);this.render();
     }
   }
   mouse(sequence) {
@@ -416,7 +416,8 @@ export class ConsoleUI extends EventEmitter {
     while(draftLines.length<=cursorRow)draftLines.push('');
     const toolbar=!this.overlay && !this.settingsView && (!pending || pending.normal) && h>=12 && box>=28;
     const cards=!this.overlay&&!this.settingsView&&(!pending||pending.normal)&&h>=16&&box>=40;
-    const cardHeight=cards?((this.queuedPrompt?2:0)+(this.failure?2:0)+(this.changes.size?1:0)):0;
+    const showReview=cards&&h>=22&&this.reviewLabel;
+    const cardHeight=cards?((this.queuedPrompt?2:0)+(this.failure?2:0)+(this.changes.size?1:0)+(showReview?2:0)):0;
     const toolbarHeight=(toolbar?1:0)+cardHeight;
     const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9-toolbarHeight));
     this.inputOffset=Math.max(0,Math.min(this.inputOffset,Math.max(0,draftLines.length-inputHeight)));
@@ -501,6 +502,7 @@ export class ConsoleUI extends EventEmitter {
       cardActions([['retry','[재시도]',Boolean(pending)],['editfailed','[요청 수정]',Boolean(pending)],['settings','[모델 변경]',Boolean(pending)]]);
     }
     if(cards&&this.changes.size)cardActions([['changes',`[파일 도구 변경 ${this.changes.size}개 · 보기]`,Boolean(pending)]]);
+    if(showReview){rows.push(muted(line(` 최근 검증 · ${this.reviewLabel}`)));cardActions([['reviewshow','[결과 보기]',Boolean(pending)],['review','[다시 검사]',Boolean(pending)]]);}
     const inputTop=rows.length;
     const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : this.overlay.kind === 'changes' ? '변경 파일 검색 · Enter 상세' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : (this.multiline ? '여러 줄 작성' : '');
     const label = title ? fit(` ${title} `,box-2) : '';
@@ -522,6 +524,7 @@ export class ConsoleUI extends EventEmitter {
       const actions=[...(!pending?[{action:'stop',label:'[■ 중단]',enabled:true}]:[]),primary];
       const more={action:'more',label:this.moreActions?'[×]':'[+]',enabled:true};
       const items=[more,...(this.moreActions ? [
+        {action:'review',label:'[검증]',enabled:Boolean(pending)},
         {action:'approval',label:'[승인]',enabled:Boolean(pending)},
         {action:'style',label:'[스타일]',enabled:Boolean(pending)},
         ...(this.tabs?[{action:'newAgent',label:'[새 에이전트]',enabled:true}]:[]),

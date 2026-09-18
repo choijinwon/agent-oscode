@@ -330,3 +330,10 @@ test('skill button invokes picker command without discarding draft',async t=>{
  assert.equal(await answer,'/skills');assert.equal(ui.buffer,'반응형으로 수정');
  const choice=ui.choose('스킬 선택',[{label:'layout',value:'layout'}]);input.write('\r');assert.equal(await choice,'layout');assert.equal(ui.buffer,'반응형으로 수정');
 });
+
+test('review card opens results and rerun without losing draft or moving input',async t=>{
+ const {ui,input,output}=fixture(t);output.rows=28;ui.reviewLabel='검증 미완료';const answer=ui.question(chatPrompt);input.write('다음 수정');
+ const top=ui.renderedRows.findIndex(row=>row.includes('╭'));assert(ui.cardButtons.some(b=>b.action==='reviewshow'));
+ ui.buttonAction('reviewshow');assert.equal(await answer,'/review show');assert.equal(ui.buffer,'다음 수정');
+ const next=ui.question(chatPrompt);ui.buttonAction('review');assert.equal(await next,'/review');assert.equal(ui.buffer,'다음 수정');assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),top);
+});

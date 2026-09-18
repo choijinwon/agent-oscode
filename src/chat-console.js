@@ -1,7 +1,7 @@
 import readline from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
-export const chatCommands = ['/summary', '/handoff', '/handoff copy', '/map', '/approval', '/style', '/skills', '/skills list', '/skills off', '/preview', '/workspace', '/cwd', '/cd ', '/ocr ', '/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan off', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
+export const chatCommands = ['/review', '/review show', '/summary', '/handoff', '/handoff copy', '/map', '/approval', '/style', '/skills', '/skills list', '/skills off', '/preview', '/workspace', '/cwd', '/cd ', '/ocr ', '/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan off', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
 export function completeCommand(line) {
   if (!line.startsWith('/')) return [[], line];
   return [chatCommands.filter(command => command.startsWith(line)), line];
