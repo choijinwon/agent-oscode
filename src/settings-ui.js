@@ -28,6 +28,7 @@ export async function settingsUI(ui, config, signal, dependencies={}) {
    check();
    ui.settingsView={...draft,keyStatus:draft.provider==='chatgpt' ? (connected ? 'ChatGPT 연결됨 · Codex 관리' : 'ChatGPT 로그인 필요') : newKey ? '변경 대기' : readKey(draft.provider,draft.baseUrl) ? '저장됨' : '미설정',notice};ui.render();
    const action=await ui.choose('설정 · ↑↓ 선택 / Enter 열기',[
+    ...(dependencies.style?[{value:'style',label:'글자·화면 스타일 (별도 저장)'}]:[]),
     {value:'chatgpt',label:'ChatGPT 계정으로 로그인'},
     ...(draft.provider==='chatgpt' ? [{value:'logout',label:'ChatGPT 연결 해제 (즉시)'}] : []),
     {value:'login',label:'브라우저로 로그인 — OpenRouter'},
@@ -38,7 +39,7 @@ export async function settingsUI(ui, config, signal, dependencies={}) {
    check();
    if(action==='cancel')return false;
    try {
-    if(action==='chatgpt') {
+    if(action==='style'){await dependencies.style();notice='스타일 설정은 모델 설정과 별도로 저장됩니다.';} else if(action==='chatgpt') {
      notice='브라우저에서 ChatGPT 계정으로 로그인하세요. Ctrl+C 취소';ui.settingsView.notice=notice;ui.render();
      await chatLogin({signal,onURL:url=>{ui.settingsView.loginURL=url;ui.settingsView.notice=notice;ui.render();},onNotice:text=>{if(ui.settingsView){ui.settingsView.notice=text;ui.render();}}});
      check();connected=true;draft.provider='chatgpt';draft.baseUrl='';draft.model='';newKey=undefined;

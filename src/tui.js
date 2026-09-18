@@ -1,3 +1,4 @@
+import {appearance, palettes} from './appearance.js';
 import {conversationRows,paintConversationRow} from './chat-layout.js';
 import { searchCommands, commandPalette } from './command-palette.js';
 import { fileCompletions } from './selected-context.js';
@@ -38,8 +39,8 @@ export function cursorPositions(text, width) {
 }
 
 export class ConsoleUI extends EventEmitter {
-  constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy, paste, tabs } = {}) {
-    super(); this.input = input; this.output = output; this.status = status; this.copy = copy; this.paste = paste; this.tabs = tabs;
+  constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy, paste, tabs, appearance: style } = {}) {
+    super(); this.appearance=appearance(style); this.input = input; this.output = output; this.status = status; this.copy = copy; this.paste = paste; this.tabs = tabs;
     this.changes = new Map(); this.failure = null; this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.olderEntries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
@@ -62,7 +63,7 @@ export class ConsoleUI extends EventEmitter {
     return this.transcriptRows().map(row=>row.text);
   }
   transcriptRows() {
-    return conversationRows([...this.olderEntries,...this.entries],this.composerWidth-2,wrapText,this.expanded);
+    return conversationRows([...this.olderEntries,...this.entries],this.composerWidth-2,wrapText,this.expanded,this.appearance.format);
   }
   mutate(fn) {
     const before = this.lines().length; fn();
@@ -298,9 +299,9 @@ export class ConsoleUI extends EventEmitter {
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
     if(action==='mode'){this.emit('toggleMode');this.render();return;}
-    if(action==='settings'||action==='preview'||action==='skills') {
+    if(action==='settings'||action==='preview'||action==='skills'||action==='style') {
       const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
-      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':'/settings');Object.assign(this,draft);this.render();
+      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':action==='style'?'/style':'/settings');Object.assign(this,draft);this.render();
     }
   }
   mouse(sequence) {
@@ -401,11 +402,12 @@ export class ConsoleUI extends EventEmitter {
     const left=Math.floor((w-box)/2);
     const top=0;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
-    const accent=t=>color?`\x1b[1;37m${t}\x1b[0m`:t;
-    const border=t=>color?`\x1b[90m${t}\x1b[0m`:t;
-    const surface=t=>color?`\x1b[48;5;235m${t}\x1b[0m`:t;
+    const palette=palettes[this.appearance.theme];
+    const accent=t=>color?`\x1b[${palette.accent}m${t}\x1b[0m`:t;
+    const border=t=>color?`\x1b[${palette.border}m${t}\x1b[0m`:t;
+    const surface=t=>color?`\x1b[${palette.surface}m${t}\x1b[0m`:t;
     const line=t=>fit(t,box);
-    const muted=t=>color?`\x1b[2m${t}\x1b[0m`:t;
+    const muted=t=>color?`\x1b[${palette.muted}m${t}\x1b[0m`:t;
     const pending=this.pending;
     const draft=pending?.hidden ? '•'.repeat(Math.min(chars(this.buffer).length,30)) : this.buffer;
     const draftLines=wrapText(draft,box-4);
@@ -457,7 +459,7 @@ export class ConsoleUI extends EventEmitter {
         const row=styled[start+index];const track=all.length>bodyHeight;
         const thumb=Math.max(1,Math.floor(bodyHeight*bodyHeight/all.length));
         const thumbTop=Math.round(start/Math.max(1,all.length-bodyHeight)*(bodyHeight-thumb));
-        return ' '+paintConversationRow(row,color)+(track?' '.repeat(Math.max(0,box-2-displayWidth(row.text)))+muted(index>=thumbTop&&index<thumbTop+thumb?'┃':'│'):'');
+        return ' '+paintConversationRow(row,color,palette)+(track?' '.repeat(Math.max(0,box-2-displayWidth(row.text)))+muted(index>=thumbTop&&index<thumbTop+thumb?'┃':'│'):'');
       }
       return line(' '+t);
     })];
@@ -520,6 +522,7 @@ export class ConsoleUI extends EventEmitter {
       const actions=[...(!pending?[{action:'stop',label:'[■ 중단]',enabled:true}]:[]),primary];
       const more={action:'more',label:this.moreActions?'[×]':'[+]',enabled:true};
       const items=[more,...(this.moreActions ? [
+        {action:'style',label:'[스타일]',enabled:Boolean(pending)},
         ...(this.tabs?[{action:'newAgent',label:'[새 에이전트]',enabled:true}]:[]),
         {action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
         {action:'copy',label:'[복사]',enabled:!this.copying},
@@ -532,7 +535,7 @@ export class ConsoleUI extends EventEmitter {
       ]),...actions];
       const chip=item=>{
         if(!color)return item.label;
-        const style=!item.enabled?'38;5;242;48;5;235':item.primary?'1;38;5;232;48;5;255':'38;5;250;48;5;235';
+        const style=!item.enabled?palette.disabled:item.primary?palette.primary:palette.button;
         return `\x1b[${style}m ${item.label.slice(1,-1)} \x1b[0m`;
       };
       let used=0;const segments=[];
@@ -555,6 +558,7 @@ export class ConsoleUI extends EventEmitter {
     rows.push(border(`╰${'─'.repeat(Math.max(0,box-2-displayWidth(bottom)))}${bottom}╯`));
     rows.push(muted(line(this.hint||this.shortcuts())));
     const visible=Array.from({length:screenHeight},(_,i)=>i>=top && i<top+h ? ' '.repeat(left)+(rows[i-top]||'') : '');
+    if(color){const base=`\x1b[${palette.base}${this.appearance.weight==='bold'?';1':''}m`;for(let i=0;i<visible.length;i++)visible[i]=base+visible[i].replaceAll('\x1b[0m','\x1b[0m'+base)+'\x1b[K\x1b[0m';}
     const rendered=visible.map((r,i)=>r===this.renderedRows[i] ? '' : `\x1b[${i+1};1H\x1b[2K${r}`).join('');
     this.renderedRows=visible;
     const cursorY=top+Math.min(h-1,inputTop+2+cursorRow-first);

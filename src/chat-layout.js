@@ -2,7 +2,7 @@ import {displayWidth,fit} from './terminal-view.js';
 
 const inline=text=>text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'$1 ($2)').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'$1');
 const pad=(text,width)=>text+' '.repeat(Math.max(0,width-displayWidth(text)));
-export function conversationRows(entries,width,wrap,expanded=false) {
+export function conversationRows(entries,width,wrap,expanded=false,format='markdown') {
  const rows=[];const add=(text,kind='text')=>rows.push({text:fit(text,width),kind});
  for(const entry of entries) {
   if(entry.type==='user') {
@@ -17,6 +17,7 @@ export function conversationRows(entries,width,wrap,expanded=false) {
    continue;
   }
   if(rows.length && rows.at(-1).text)add('');add('OSCODE','label');
+  if(format==='plain'){for(const text of wrap(entry.text,width))add(text);continue;}
   const lines=entry.text.split('\n');let code=false;
   for(let i=0;i<lines.length;i++) {
    const line=lines[i];
@@ -44,12 +45,12 @@ export function conversationRows(entries,width,wrap,expanded=false) {
  }
  return rows;
 }
-export function paintConversationRow(row,color) {
+export function paintConversationRow(row,color,palette={}) {
  if(!color)return row.text;
- const styles={heading:'1',label:'1;37',muted:'90',code:'48;5;235;38;5;189'};
+ const styles={heading:'1',label:palette.accent||'1;37',muted:palette.muted||'90',code:palette.code||'48;5;235;38;5;189'};
  if(row.kind==='user') {
   const start=row.text.search(/\S/);if(start<0)return row.text;
-  return row.text.slice(0,start)+`\x1b[48;5;237;37m${row.text.slice(start)}\x1b[0m`;
+  return row.text.slice(0,start)+`\x1b[${palette.user||'48;5;237;37'}m${row.text.slice(start)}\x1b[0m`;
  }
  return styles[row.kind]?`\x1b[${styles[row.kind]}m${row.text}\x1b[0m`:row.text;
 }

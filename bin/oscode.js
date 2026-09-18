@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {readAppearance,saveAppearance,appearanceUI} from '../src/appearance.js';
 import { ProjectSkills } from '../src/skills.js';
 import { changePreview } from '../src/change-preview.js';
 import {AgentTabs} from '../src/agent-tabs.js';
@@ -287,7 +288,8 @@ async function main(raw = process.argv.slice(2), host) {
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const skills = new ProjectSkills(root);
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
-    const uiOptions={ paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), skill:skills.selected?.title, directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
+    let style;try{style=await readAppearance(root);}catch(error){print(`화면 설정 읽기 실패: ${error.message} · 기본 스타일 사용`);}
+    const uiOptions={ appearance:style, paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), skill:skills.selected?.title, directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) };
     const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.plan?['--plan']:[])];
     screen=host?host.createUI(uiOptions,childArgs):new ConsoleUI(uiOptions);
@@ -431,6 +433,13 @@ async function main(raw = process.argv.slice(2), host) {
         finally {active=null;screen?.setStage('대기');}
         continue;
       }
+      if(input==='/style'){
+        if(!screen){print('스타일 선택은 전체 화면 콘솔에서 사용할 수 있습니다. --simple 없이 실행하세요.');continue;}
+        active=new AbortController();
+        try{await appearanceUI(screen,{signal:active.signal,save:value=>saveAppearance(root,value)});}
+        catch(error){print(`스타일 설정 중단: ${error.message}`);}
+        finally{active=null;}continue;
+      }
       if (input === '/skills' || input.startsWith('/skills ')) {
         try {
           let id=input.slice(7).trim();
@@ -492,7 +501,7 @@ async function main(raw = process.argv.slice(2), host) {
         active = new AbortController();
         try {
           if (!screen && config.provider==='chatgpt') { print('ChatGPT 설정은 --simple 없이 전체 화면의 /settings를 사용하세요.');continue; }
-          if (screen) { const applied=await settingsUI(screen,config,active.signal);print(applied ? '설정을 적용했습니다.' : '설정 변경을 취소했습니다.');continue; }
+          if (screen) { const applied=await settingsUI(screen,config,active.signal,{style:()=>appearanceUI(screen,{signal:active.signal,save:value=>saveAppearance(root,value)})});print(applied ? '설정을 적용했습니다.' : '설정 변경을 취소했습니다.');continue; }
           print('모델 설정 · Enter는 현재 값 유지 · Ctrl+C 취소');
           const provider = (await rl.question(`공급자 [${config.provider}]: `, { signal: active.signal })).trim() || config.provider;
           if (!['anthropic', 'compatible'].includes(provider)) throw new Error('anthropic 또는 compatible을 입력하세요.');
