@@ -24,7 +24,7 @@ test('smart scroll preserves viewport while output arrives and supports jump to 
 });
 test('menu selects before sending and multiline cursor stays visible after resize',async t=>{
  const {ui,input,output}=fixture(t);const answer=ui.question(chatPrompt);
- input.write('/set');ui.key('',{name:'down'});input.write('\r');assert.equal(ui.buffer,'/settings');assert(ui.pending);
+ input.write('/set');ui.key('',{name:'tab'});input.write('\r');assert.equal(ui.buffer,'/settings');assert(ui.pending);
  input.write('\r');assert.equal(await answer,'/settings');
  const next=ui.question(chatPrompt);input.write('한글'.repeat(80));const before=ui.buffer;output.columns=26;output.emit('resize');
  assert.equal(ui.buffer,before);ui.key('',{name:'up'});assert(ui.cursor<160);
@@ -78,4 +78,21 @@ test('cancel recovery preserves newer drafts and settings disable history shortc
 });
 test('cancelled prompt restores immediately when no newer draft exists',t=>{
  const {ui}=fixture(t);ui.recoverPrompt('/exit\ncode',true);assert.equal(ui.buffer,'/exit\ncode');assert.equal(ui.hasPaste,true);
+});
+test('multiline mode uses Enter for newline and F5 for explicit send; settings remain single-line',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);ui.key('',{name:'f3'});
+ input.write('첫 줄\r둘째 줄');assert(ui.pending);assert.equal(ui.buffer,'첫 줄\n둘째 줄');
+ ui.key('',{name:'f5'});assert.equal(await answer,'첫 줄\n둘째 줄');
+ const setting=ui.question('설정');input.write('value\r');assert.equal(await setting,'value');
+});
+test('completion does not intercept arrows until Tab; line editing preserves surrounding text',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'down'});assert.equal(ui.menuIndex,-1);
+ input.write('\r');assert.equal(await answer,'/set');
+ ui.buffer='앞 줄\nhello world\n뒤 줄';ui.cursor=15;
+ ui.key('',{ctrl:true,name:'w'});assert.equal(ui.buffer,'앞 줄\nhello \n뒤 줄');
+ ui.key('',{ctrl:true,name:'a'});assert.equal(ui.cursor,4);
+ ui.key('',{ctrl:true,name:'k'});assert.equal(ui.buffer,'앞 줄\n\n뒤 줄');
+});
+test('unchanged screen rows are not rewritten on cursor-only movement',t=>{
+ const {ui,text,clear}=fixture(t);ui.append('기존 대화');ui.insert('입력');ui.render();clear();ui.key('',{name:'left'});assert(!text().includes('기존 대화'));
 });

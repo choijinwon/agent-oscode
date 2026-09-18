@@ -41,12 +41,13 @@ export class ConsoleUI extends EventEmitter {
     super(); this.input = input; this.output = output; this.status = status;
     this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
+    this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
     this.expanded = false; this.menuIndex = -1; this.closed = false;
     this.stage = '대기'; this.panel = '대화'; this.pasting = false;
     this.oldRaw = Boolean(input.isRaw);
     emitKeypressEvents(input);
     this.keyListener = (text, key) => this.key(text, key || {});
-    this.resizeListener = () => this.render();
+    this.resizeListener = () => { this.renderedRows = []; this.render(); };
     input.on('keypress', this.keyListener); output.on('resize', this.resizeListener);
     this.endListener = () => this.close(); input.on('end', this.endListener);
     input.setRawMode?.(true); input.resume();
@@ -116,7 +117,7 @@ export class ConsoleUI extends EventEmitter {
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
     if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
     if (!this.pending) return ' Ctrl+C 작업 취소 · 초안 편집 가능 · F2 로그';
-    return ' Ctrl+R 기록 · Ctrl+P 명령 · F4 복구 · Enter 전송 · Alt+Enter 줄바꿈';
+    return this.multiline ? ' Enter 줄바꿈 · F5 전송 · F3 한 줄 모드 · Ctrl+A/E 줄 처음/끝' : ' Enter 전송 · Ctrl+J 줄바꿈 · F3 여러 줄 모드 · Tab 완성';
   }
   menu() {
     if (this.overlay) return this.choices().map(item => item.label);
@@ -151,7 +152,7 @@ export class ConsoleUI extends EventEmitter {
     }
     this.pending = null; this.lastInputWasPaste = pending.normal && Boolean(this.hasPaste); this.hasPaste = false; pending.signal?.removeEventListener('abort', pending.abort);
     if (!error && !pending.hidden && value?.trim()) this.append(`\n나 › ${value}\n`);
-    this.buffer = ''; this.cursor = 0; this.menuIndex = -1;
+    this.buffer = ''; this.cursor = 0; this.menuIndex = -1; this.completionOpen = false;
     if (!pending.normal && this.savedDraft) { Object.assign(this, this.savedDraft); this.savedDraft = null; }
     if (error) pending.reject(error); else pending.resolve(value);
     this.render();
@@ -167,23 +168,36 @@ export class ConsoleUI extends EventEmitter {
     if (this.pasting) { if (text && this.pasteText.length <= 65536) this.pasteText += text.replace(/\r/g,'\n'); return; }
     if (key.ctrl && key.name === 'c') { if (this.overlay) this.closeOverlay(); else this.emit('SIGINT'); return; }
     if (key.ctrl && ['r','p'].includes(key.name)) { this.openOverlay(key.name === 'r' ? 'history' : 'palette'); return; }
+    if (key.name === 'f3' && !this.overlay && (!this.pending || this.pending.normal)) { this.multiline = !this.multiline; this.hint = ''; this.render(); return; }
+    if (key.name === 'f5' && !this.overlay && this.pending?.normal) { this.finish(this.buffer); return; }
+    if (key.name === 'return' && this.multiline && !this.overlay && (!this.pending || this.pending.normal) && !this.completionOpen) { this.insert('\n'); this.render(); return; }
     if (key.name === 'f4') { this.restorePrompt(); return; }
     if (key.name === 'pageup') { this.scroll = Math.min(this.lines().length, this.scroll + Math.max(1,this.height-8)); this.render(); return; }
     if (key.name === 'pagedown') { this.scroll = Math.max(0, this.scroll - Math.max(1,this.height-8)); this.render(); return; }
     if (key.ctrl && key.name === 'end') { this.scroll = 0; this.render(); return; }
     if (key.name === 'f2') { this.expanded = !this.expanded;this.scroll=0;this.render();return; }
-    if (key.name === 'escape') { if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
+    if (key.name === 'escape') { this.completionOpen = false; if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
     this.hint='';
     const menu=this.menu();
-    if(menu.length && ['up','down','tab'].includes(key.name)) {
+    if (key.name === 'tab' && !this.overlay && !this.completionOpen && menu.length) { this.completionOpen = true; this.menuIndex = 0; this.render(); return; }
+    if(menu.length && (this.overlay || this.completionOpen) && ['up','down','tab'].includes(key.name)) {
       const direction=key.name==='up'?-1:1;this.menuIndex=(this.menuIndex+direction+menu.length)%menu.length;this.render();return;
     }
     if (key.name==='return' && !key.meta && !key.shift) {
       if (this.overlay) { const choice = this.choices()[Math.max(0,this.menuIndex)]; if (choice) this.closeOverlay(choice); return; }
-      if(menu.length && this.menuIndex>=0){this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;this.render();return;}
+      if(this.completionOpen && menu.length && this.menuIndex>=0){this.completionOpen=false;this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;this.render();return;}
       if(this.pending) this.finish(this.buffer); else {this.hint='작업 중입니다. 초안을 편집하고 완료 후 전송하세요.';this.render();} return;
     }
-    if ((key.name==='return' && (key.meta||key.shift)) || key.name==='enter' || (key.ctrl&&key.name==='j')) this.insert('\n');
+    const parts = chars(this.buffer);
+    const lineStart = parts.slice(0,this.cursor).lastIndexOf('\n') + 1;
+    const nextBreak = parts.indexOf('\n',this.cursor);
+    const lineEnd = nextBreak < 0 ? parts.length : nextBreak;
+    if (key.ctrl && key.name === 'a') this.cursor = lineStart;
+    else if (key.ctrl && key.name === 'e') this.cursor = lineEnd;
+    else if (key.ctrl && key.name === 'u') { parts.splice(lineStart,this.cursor-lineStart); this.cursor=lineStart; this.buffer=parts.join(''); }
+    else if (key.ctrl && key.name === 'k') { parts.splice(this.cursor,lineEnd-this.cursor || (nextBreak >= 0 ? 1 : 0)); this.buffer=parts.join(''); }
+    else if (key.ctrl && key.name === 'w') { let start=this.cursor; while(start>0 && /\s/u.test(parts[start-1])) start--; while(start>0 && !/\s/u.test(parts[start-1])) start--; parts.splice(start,this.cursor-start); this.cursor=start; this.buffer=parts.join(''); }
+    else if ((key.name==='return' && (key.meta||key.shift)) || key.name==='enter' || (key.ctrl&&key.name==='j')) this.insert('\n');
     else if (key.name==='up' || key.name==='down') {
       const positions=cursorPositions(this.buffer,this.width-4), current=positions[this.cursor];
       const row=current.row+(key.name==='up'?-1:1);
@@ -192,12 +206,12 @@ export class ConsoleUI extends EventEmitter {
     }
     else if (key.name==='left') this.cursor=Math.max(0,this.cursor-1);
     else if (key.name==='right') this.cursor=Math.min(chars(this.buffer).length,this.cursor+1);
-    else if (key.name==='home') this.cursor=0;
-    else if (key.name==='end') this.cursor=chars(this.buffer).length;
+    else if (key.name==='home') this.cursor=lineStart;
+    else if (key.name==='end') this.cursor=lineEnd;
     else if (key.name==='backspace') {const p=chars(this.buffer);if(this.cursor>0)p.splice(--this.cursor,1);this.buffer=p.join('');}
     else if (key.name==='delete') {const p=chars(this.buffer);p.splice(this.cursor,1);this.buffer=p.join('');}
     else if (text && !key.ctrl && !key.meta) this.insert(safe(text));
-    this.menuIndex=this.overlay ? 0 : -1;this.render();
+    this.completionOpen=false; this.menuIndex=this.overlay ? 0 : -1;this.render();
   }
   render() {
     if(this.closed)return;
@@ -211,9 +225,12 @@ export class ConsoleUI extends EventEmitter {
     const prefix=pending?.hidden ? draft : chars(this.buffer).slice(0,this.cursor).join('');
     const position=cursorPositions(prefix,w-4).at(-1);const cursorRow=position.row;
     while(draftLines.length<=cursorRow)draftLines.push('');
-    const inputHeight=Math.min(4,Math.max(1,draftLines.length),Math.max(1,h-7));
-    const first=Math.max(0,cursorRow-inputHeight+1);
-    const menu=this.menu();const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
+    const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9));
+    this.inputOffset=Math.max(0,Math.min(this.inputOffset,Math.max(0,draftLines.length-inputHeight)));
+    if(cursorRow<this.inputOffset)this.inputOffset=cursorRow;
+    if(cursorRow>=this.inputOffset+inputHeight)this.inputOffset=cursorRow-inputHeight+1;
+    const first=this.inputOffset;
+    const menu=this.overlay || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-7));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-5);
@@ -224,11 +241,13 @@ export class ConsoleUI extends EventEmitter {
     rows.push(line(` ${this.scroll ? '최신 답변 ↓ Ctrl+End · ' : ''}토큰${s.usageEstimated?'(추정 포함)':''} ${s.used||0}/${s.budget||0} · 잔여 ${Math.max(0,(s.budget||0)-(s.used||0))} · 초안 추정 ${s.estimate||0}`));
     for(const option of options.slice(0,menuHeight))rows.push(line(`${option===menu[this.menuIndex]?' ›':'  '} ${option}`));
     const inputTop=rows.length;
-    const inputLabel=fit(` ─ ${this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색 (한글 가능)') : pending?.hidden?'키 숨김 입력':pending&&!pending.normal?pending.label:'메시지'} `,w);
+    const inputLabel=fit(` ─ ${this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색 (한글 가능)') : pending?.hidden?'키 숨김 입력':pending&&!pending.normal?pending.label:`메시지${this.multiline ? ' · 여러 줄' : ''} · ${cursorRow+1}/${draftLines.length}줄`} `,w);
     rows.push(accent(inputLabel+'─'.repeat(Math.max(0,w-displayWidth(inputLabel)))));
     for(let i=0;i<inputHeight;i++)rows.push(line(` ${i===0?'›':'│'} ${draftLines[first+i]||''}`));
     rows.push(line(this.hint||this.shortcuts()));
-    const rendered=rows.slice(0,h).map((r,i)=>`\x1b[${i+1};1H\x1b[2K${r}`).join('');
+    const visible=rows.slice(0,h);
+    const rendered=visible.map((r,i)=>r===this.renderedRows[i] ? '' : `\x1b[${i+1};1H\x1b[2K${r}`).join('');
+    this.renderedRows=visible;
     const cursorY=Math.min(h-1,inputTop+2+cursorRow-first);
     const cursorX=Math.min(w,4+position.col);
     this.output.write(`\x1b[?25l\x1b[H${rendered}\x1b[${cursorY};${cursorX}H\x1b[?25h`);

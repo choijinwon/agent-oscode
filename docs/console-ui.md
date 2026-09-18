@@ -8,14 +8,14 @@ a static illustrative preview, not the interactive full-screen session.
 ## Conversation and input
 
 - The header shows project, panel, model and execution stage.
-- The composer stays at the bottom; it grows to four visible rows and follows
+- The composer stays at the bottom; it starts with three visible rows and grows to eight rows (less in small terminals) and follows
   the editing cursor within longer input.
 - Enter sends. Alt+Enter or Ctrl+J inserts a newline. Terminal mappings for
   Shift+Enter vary; use the documented keys instead.
 - Bracketed paste preserves multiline text as one draft without sending it.
   Pasted slash commands are sent as prompt text, not executed as CLI commands.
   For terminals without bracketed paste, use `/paste` and `/send`.
-- Left/right and up/down move within input; Home/End jump to its start/end.
+- Left/right and up/down move within input; Home/End or Ctrl+A/E jump to the current line’s start/end.
 - Input is bounded to 64 KiB. Additional input is rejected with an inline hint.
 - You can edit an unsent draft while the agent works. It is not submitted until
   the current operation finishes and you press Enter again.
@@ -27,7 +27,7 @@ a static illustrative preview, not the interactive full-screen session.
   the viewport stays in place and `최신 답변 ↓` appears.
 - Ctrl+End returns to the latest output. Scrolling uses the keyboard; no mouse
   capture is enabled, so terminal text selection remains available.
-- Type `/` for command choices. Up/down or Tab selects a command; Enter inserts
+- Type `/` and press Tab for command choices. Up/down or Tab selects a command; Enter inserts
   it and another Enter runs it.
 - F2 expands or collapses tool output collectively. Summaries remain visible
   while collapsed. Full execution data is retained in the normal local session.
@@ -66,7 +66,7 @@ readers, and `NO_COLOR=1` to disable colors.
 ## File references and context selection
 
 Use `@src/Button.vue` in a prompt, or `@"src/my component.vue"` for spaces.
-The full-screen console suggests project file names while typing an `@` reference;
+The full-screen console suggests project file names after pressing Tab on an `@` reference;
 Tab/up/down selects, Enter inserts, and a second Enter sends. Suggestions refresh
 between turns and inherit the bounded file listing (up to 3,000 files). `--simple`
 accepts references without file completion.
@@ -131,3 +131,20 @@ There is no automatic retry loop or guarantee that the model finds the cause.
 These conveniences are available in the default full-screen console. They add
 no model calls. Input composed by an operating-system IME depends on the terminal;
 this feature does not implement or claim control of IME composition events.
+
+
+## Long-form input
+
+F3 toggles multiline composition for this running console. In multiline mode,
+Enter inserts a newline and F5 sends. In normal mode Enter sends and Ctrl+J or
+Alt+Enter inserts a newline. Settings and approvals keep Enter to confirm.
+The composer shows the current visual line and total visual lines; its viewport
+follows the cursor when the input exceeds eight visible rows. Small terminals
+reserve space for conversation and controls and show fewer input rows.
+
+Ctrl+A/E move to the logical line start/end, Ctrl+U removes text to line start,
+Ctrl+K removes text to line end (or the following newline at line end), and Ctrl+W
+removes the preceding whitespace-delimited word. Text after the cursor is kept.
+Completion is opened explicitly with Tab; arrows edit the input until then.
+Esc closes completion. Only changed screen rows are repainted to reduce output
+and flicker while editing. Operating-system IME behavior is still terminal-owned.
