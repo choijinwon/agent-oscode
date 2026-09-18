@@ -320,9 +320,9 @@ export class ConsoleUI extends EventEmitter {
     if(this.closed)return;
     const w=this.width,screenHeight=this.height,s=this.status(), box=this.composerWidth;
     const home=this.entries.length===0 && !this.settingsView;
-    let h=home ? Math.min(screenHeight,20) : screenHeight;
+    const h=screenHeight;
     const left=Math.floor((w-box)/2);
-    const top=home ? Math.floor((screenHeight-h)/2) : 0;
+    const top=0;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
     const accent=t=>color?`\x1b[1;37m${t}\x1b[0m`:t;
     const border=t=>color?`\x1b[90m${t}\x1b[0m`:t;
@@ -346,8 +346,6 @@ export class ConsoleUI extends EventEmitter {
     const offset=Math.max(0,chosen-count+1);const options=menu.slice(offset,offset+count);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8-toolbarHeight));
-    // Let short conversations grow downward from the header instead of pinning them to the screen bottom.
-    if(!home && !this.settingsView) h=Math.min(screenHeight,Math.max(14,this.lines().length+inputHeight+menuHeight+6+toolbarHeight));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6-toolbarHeight);
     const styled=this.transcriptRows();const all=styled.map(row=>row.text);this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
@@ -373,13 +371,13 @@ export class ConsoleUI extends EventEmitter {
       body=welcome.slice(0,bodyHeight);
       while(body.length<bodyHeight)body.push('');
     } else {
-      // Keep short conversations beside the composer instead of far above it.
-      while(body.length<bodyHeight)body.unshift('');
+      // Keep messages near the header; reserve the remaining space above the fixed composer.
+      while(body.length<bodyHeight)body.push('');
     }
     const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
       if(home && i===1)return accent(line(' '+t));
-      const index=i-(bodyHeight-(end-start));
-      if(!home && !this.settingsView && index>=0)return ' '+paintConversationRow(styled[start+index],color);
+      const index=i;
+      if(!home && !this.settingsView && index<end-start)return ' '+paintConversationRow(styled[start+index],color);
       return line(' '+t);
     })];
     const number = value => Number(value || 0).toLocaleString('en-US');

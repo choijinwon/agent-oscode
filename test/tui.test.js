@@ -106,15 +106,15 @@ test('boxed composer stays within narrow and wide terminals and hides zero usage
   assert.equal(ui.composerWidth,Math.min(width-1,88));
  }
 });
-test('wide landing centers the workspace and cursor, then conversation aligns above composer',async t=>{
+test('wide landing and conversation keep composer at the bottom',async t=>{
  const {ui,output,text,clear}=fixture(t);output.columns=180;output.rows=48;
  ui.renderedRows=[];clear();ui.render();
  assert(text().includes('프론트엔드 작업을 시작하세요'));
- const cursor=text().match(/\x1b\[(\d+);(\d+)H\x1b\[\?25h$/);assert(cursor);assert(Number(cursor[2])>30);assert(Number(cursor[1])<40);
+ const cursor=text().match(/\x1b\[(\d+);(\d+)H\x1b\[\?25h$/);assert(cursor);assert(Number(cursor[2])>30);assert(Number(cursor[1])>40);
  ui.append('짧은 답변');ui.renderedRows=[];clear();ui.render();
  const rows=text().split(/\x1b\[\d+;1H\x1b\[2K/).slice(1);
  const message=rows.findIndex(row=>row.includes('짧은 답변'));const box=rows.findIndex(row=>row.includes('╭'));
- assert(message>=0);assert.equal(box-message,2);assert(!text().includes('프론트엔드 작업을 시작하세요'));
+ assert(message>=0);assert(message<5);assert(box>40);assert(!text().includes('프론트엔드 작업을 시작하세요'));
  output.columns=32;output.rows=12;output.emit('resize');assert.equal(ui.composerWidth,31);
 });
 test('model picker filters and confirms a model without entering chat history',async t=>{
@@ -201,11 +201,12 @@ test('toolbar has no actions in secret entry and disables mouse tracking on clos
  ui.key('',{name:'f10'});assert(ui.pending.hidden);input.write('fake\r');await answer;ui.close();assert(text().includes('\x1b[?1000l\x1b[?1006l'));
 });
 
-test('short chats stay near header on tall terminals and grow without losing controls',t=>{
+test('short chats stay near header while composer stays fixed through output and scrolling',t=>{
  const {ui,output}=fixture(t);output.columns=180;output.rows=80;
  ui.entries=[{type:'user',text:'하이'},{type:'assistant',text:'안녕하세요!'}];ui.render();
  const rows=ui.renderedRows;const header=rows.findIndex(r=>r.includes('agent-oscode')||r.includes('workspace'));
  const user=rows.findIndex(r=>r.includes('하이'));const answer=rows.findIndex(r=>r.includes('안녕하세요!'));const composer=rows.findIndex(r=>r.includes('╭'));
- assert(user-header<6);assert(answer-user<=4);assert(composer<16);assert(ui.buttons.every(b=>b.y<=18));
- ui.entries.push({type:'assistant',text:'긴 답변\n'.repeat(100)});ui.render();assert(ui.renderedRows.some(r=>r.includes('╭')));ui.key('',{name:'pageup'});assert(ui.scroll>0);
+ assert(user-header<6);assert(answer-user<=4);assert.equal(composer,output.rows-7);assert(ui.buttons.every(b=>b.y===output.rows-2));
+ ui.entries.push({type:'assistant',text:'긴 답변\n'.repeat(100)});ui.render();assert(ui.renderedRows.some(r=>r.includes('╭')));ui.key('',{name:'pageup'});assert(ui.scroll>0);assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),composer);
+ output.rows=40;output.emit('resize');assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),33);
 });
