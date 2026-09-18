@@ -119,7 +119,7 @@ export class ConsoleUI extends EventEmitter {
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
     if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
     if (!this.pending) return ' Ctrl+C 작업 취소 · 초안 편집 가능 · F2 로그';
-    return this.multiline ? ' Enter 줄바꿈 · F5 전송 · F3 한 줄 모드 · Ctrl+A/E 줄 처음/끝' : ' Enter 전송 · Ctrl+J 줄바꿈 · F3 여러 줄 모드 · Tab 완성';
+    return this.multiline ? ' Enter 줄바꿈 · F5 전송 · Tab 모드 전환 · F3 한 줄' : ' Enter 전송 · Ctrl+J 줄바꿈 · Tab 모드 전환 · F3 여러 줄';
   }
   menu() {
     if (this.pending?.choices) return this.selection().map(item=>item.label);
@@ -188,6 +188,11 @@ export class ConsoleUI extends EventEmitter {
     if (key.name === 'escape') { this.completionOpen = false; if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
     this.hint='';
     const menu=this.menu();
+    if (key.name === 'tab' && !menu.length && !this.overlay && !this.pending?.choices) {
+      if (this.pending?.normal) this.emit('toggleMode');
+      else this.hint = '대화 입력 대기 중에만 모드를 전환할 수 있습니다.';
+      this.render(); return;
+    }
     if (key.name === 'tab' && !this.overlay && !this.completionOpen && menu.length) { this.completionOpen = true; this.menuIndex = 0; this.render(); return; }
     if(menu.length && (this.overlay || this.pending?.choices || this.completionOpen) && ['up','down','tab'].includes(key.name)) {
       const direction=key.name==='up'?-1:1;this.menuIndex=(this.menuIndex+direction+menu.length)%menu.length;this.render();return;

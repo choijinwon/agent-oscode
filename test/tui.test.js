@@ -124,3 +124,11 @@ test('model picker filters and confirms a model without entering chat history',a
  input.write('bet');assert.equal(ui.selection().length,1);input.write('\r');assert.equal(await answer,'beta');assert.equal(ui.buffer,'기존 초안');assert.equal(ui.history.length,0);
  const controller=new AbortController();const pending=ui.choose('모델 검색',[{value:'alpha',label:'alpha'}],{signal:controller.signal});controller.abort();await assert.rejects(pending,/Cancelled/);assert.equal(ui.buffer,'기존 초안');
 });
+test('Tab requests mode toggle only in ordinary idle chat and preserves the draft',async t=>{
+ const {ui,input}=fixture(t);let toggles=0;ui.on('toggleMode',()=>toggles++);
+ const answer=ui.question(chatPrompt);input.write('작성 중인 요청');ui.key('',{name:'tab'});
+ assert.equal(toggles,1);assert.equal(ui.buffer,'작성 중인 요청');assert(ui.pending);
+ input.write('\r');await answer;ui.key('',{name:'tab'});assert.equal(toggles,1);
+ const setting=ui.questionHidden('키');ui.key('',{name:'tab'});assert.equal(toggles,1);input.write('fake\r');await setting;
+ const next=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'tab'});assert.equal(toggles,1);assert(ui.completionOpen);input.write('\r\r');assert.equal(await next,'/settings');
+});

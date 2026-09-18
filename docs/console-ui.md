@@ -177,3 +177,11 @@ partial changes. Settings still apply to the current chat process.
 
 Catalog formats: [Claude Models API](https://platform.claude.com/docs/en/api/models)
 and [OpenRouter Models API](https://openrouter.ai/docs/api/api-reference/models/get-models).
+
+## Tab mode switching
+
+In ordinary chat input, Tab toggles BUILD / PLAN without submitting or losing the
+draft. The header updates immediately. Project-locked PLAN cannot switch to BUILD.
+Switching never applies a saved plan; use `/apply` for that. Tab is unavailable for
+mode switching during work, settings or approvals. Slash/file completion takes
+priority when candidates exist; command/history/model pickers retain navigation.

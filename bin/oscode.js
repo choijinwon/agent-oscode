@@ -296,6 +296,14 @@ async function main() {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  screen?.on('toggleMode', () => {
+    if (active || !screen?.pending?.normal) return;
+    try {
+      screen.hint = switchMode(config, tools, session, !config.plan, planLocked);
+      screen.render();
+      saveSession(session).catch(error => print(`모드 저장 실패: ${error.message}`));
+    } catch (error) { screen.hint = error.message; screen.render(); }
+  });
   const selectedContext = new SelectedContext(tools);
   const repair = new RepairFlow(tools, config);
   let verbose = Boolean(args.verbose);
