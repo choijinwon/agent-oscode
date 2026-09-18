@@ -41,7 +41,7 @@ export class ConsoleUI extends EventEmitter {
   constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy } = {}) {
     super(); this.input = input; this.output = output; this.status = status; this.copy = copy;
     this.history = []; this.overlay = null; this.recovery = null;
-    this.files = []; this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
+    this.files = []; this.entries = []; this.olderEntries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
     this.expanded = false; this.menuIndex = -1; this.closed = false;
     this.stage = '대기'; this.panel = '대화'; this.pasting = false;
@@ -62,7 +62,7 @@ export class ConsoleUI extends EventEmitter {
     return this.transcriptRows().map(row=>row.text);
   }
   transcriptRows() {
-    return conversationRows(this.entries,this.composerWidth-2,wrapText,this.expanded);
+    return conversationRows([...this.olderEntries,...this.entries],this.composerWidth-2,wrapText,this.expanded);
   }
   mutate(fn) {
     const before = this.lines().length; fn();
@@ -86,8 +86,19 @@ export class ConsoleUI extends EventEmitter {
       this.bound();
     });
   }
-  bound() { // Session JSON remains the authoritative full transcript.
-    while (this.entries.length > 250 || this.entries.reduce((n,e)=>n+e.text.length,0) > 300000) this.entries.shift();
+  bound() { // Retain older entries for scrolling instead of discarding visible history.
+    while (this.entries.length > 250 || this.entries.reduce((n,e)=>n+e.text.length,0) > 300000) this.olderEntries.push(this.entries.shift());
+  }
+  restoreSession(session) {
+    this.entries=[];this.olderEntries=[];
+    for(const turn of [...(session.archive||[]),...(session.turns||[])]) {
+      for(const message of turn.messages||[]) {
+        if(!['user','assistant'].includes(message.role)||typeof message.content!=='string'||!message.content.trim())continue;
+        const content=message.role==='user'?message.content.split('\n\n[Selected source excerpts:')[0]:message.content;
+        this.entries.push({type:message.role,text:safe(content)});
+      }
+    }
+    this.bound();this.scroll=0;this.render();
   }
   log(title, text) { this.mutate(() => { this.entries.push({ type: 'log', title: safe(title), text: `${safe(title)}\n${safe(text)}\n` }); this.bound(); }); }
   preview(text) { this.panel = text.startsWith('$') ? '실행 검토' : '변경 검토'; this.append(`\n── ${this.panel} (y 적용 / n 취소) ──\n${text}\n`); this.scroll = 0; this.render(); }
@@ -233,8 +244,7 @@ export class ConsoleUI extends EventEmitter {
   mouse(sequence) {
     const match=sequence.match(/^(\d+);(\d+);(\d+)([Mm])$/);if(!match||match[4]!=='M')return;
     const [,button,x,y]=match;
-    if(Number(button)===64){this.key('',{name:'pageup'});return;}
-    if(Number(button)===65){this.key('',{name:'pagedown'});return;}
+    if((Number(button)&64)!==0){this.scroll=Math.max(0,this.scroll+((Number(button)&1)?-3:3));this.render();return;}
     if(Number(button)!==0)return;
     const hit=this.buttons?.find(b=>Number(y)===b.y && Number(x)>=b.x && Number(x)<b.x+b.width);
     if(hit)this.buttonAction(hit.action);
@@ -262,6 +272,7 @@ export class ConsoleUI extends EventEmitter {
     if (key.name === 'f4') { this.restorePrompt(); return; }
     if (key.name === 'pageup') { this.scroll = Math.min(this.lines().length, this.scroll + Math.max(1,this.height-8)); this.render(); return; }
     if (key.name === 'pagedown') { this.scroll = Math.max(0, this.scroll - Math.max(1,this.height-8)); this.render(); return; }
+    if (key.ctrl && key.name === 'home') { this.scroll=this.lines().length; this.render(); return; }
     if (key.ctrl && key.name === 'end') { this.scroll = 0; this.render(); return; }
     if (key.name === 'f2') { this.expanded = !this.expanded;this.scroll=0;this.render();return; }
     if (key.name === 'escape') { this.completionOpen = false; if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
@@ -319,7 +330,7 @@ export class ConsoleUI extends EventEmitter {
   render() {
     if(this.closed)return;
     const w=this.width,screenHeight=this.height,s=this.status(), box=this.composerWidth;
-    const home=this.entries.length===0 && !this.settingsView;
+    const home=this.entries.length===0 && this.olderEntries.length===0 && !this.settingsView;
     const h=screenHeight;
     const left=Math.floor((w-box)/2);
     const top=0;
@@ -377,12 +388,17 @@ export class ConsoleUI extends EventEmitter {
     const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
       if(home && i===1)return accent(line(' '+t));
       const index=i;
-      if(!home && !this.settingsView && index<end-start)return ' '+paintConversationRow(styled[start+index],color);
+      if(!home && !this.settingsView && index<end-start) {
+        const row=styled[start+index];const track=all.length>bodyHeight;
+        const thumb=Math.max(1,Math.floor(bodyHeight*bodyHeight/all.length));
+        const thumbTop=Math.round(start/Math.max(1,all.length-bodyHeight)*(bodyHeight-thumb));
+        return ' '+paintConversationRow(row,color)+(track?' '.repeat(Math.max(0,box-2-displayWidth(row.text)))+muted(index>=thumbTop&&index<thumbTop+thumb?'┃':'│'):'');
+      }
       return line(' '+t);
     })];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
-    rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
+    rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
     for(const option of options.slice(0,menuHeight)) {
       const selected=option===menu[this.menuIndex];
       const description=!this.overlay&&!pending?.choices ? commandPalette.find(([command])=>command===option)?.[1] : '';

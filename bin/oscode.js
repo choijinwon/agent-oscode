@@ -279,6 +279,7 @@ async function main() {
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
     screen = new ConsoleUI({ copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) });
+    if(readSaved)screen.restoreSession(session);
 
   }
   const rl = screen || (interactive ? createChatConsole() : null);

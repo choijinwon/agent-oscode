@@ -210,3 +210,20 @@ test('short chats stay near header while composer stays fixed through output and
  ui.entries.push({type:'assistant',text:'긴 답변\n'.repeat(100)});ui.render();assert(ui.renderedRows.some(r=>r.includes('╭')));ui.key('',{name:'pageup'});assert(ui.scroll>0);assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),composer);
  output.rows=40;output.emit('resize');assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),33);
 });
+
+test('wheel scroll retains old messages beyond active transcript limit and returns to latest',t=>{
+ const {ui,input}=fixture(t);
+ for(let i=0;i<270;i++)ui.entries.push({type:'user',text:`message-${i}`});ui.bound();ui.render();
+ assert(ui.olderEntries.length>0);assert(ui.lines().some(line=>line.includes('message-0 ')));
+ const composer=ui.renderedRows.findIndex(r=>r.includes('╭'));
+ input.write('\x1b[<64;10;4M');assert.equal(ui.scroll,3);
+ input.write('\x1b[<68;10;4M');assert.equal(ui.scroll,6);
+ ui.key('',{ctrl:true,name:'home'});assert(ui.renderedRows.some(line=>line.includes('message-0 ')));
+ assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),composer);
+ ui.key('',{ctrl:true,name:'end'});assert.equal(ui.scroll,0);assert(ui.renderedRows.some(line=>line.includes('message-269')));
+});
+test('resumed sessions display archived and current conversation without sending input',t=>{
+ const {ui}=fixture(t);
+ ui.restoreSession({archive:[{messages:[{role:'user',content:'이전 질문'},{role:'assistant',content:'이전 답변'}]}],turns:[{messages:[{role:'user',content:'새 질문\n\n[Selected source excerpts: hidden source'},{role:'assistant',content:'새 답변'}]}]});
+ assert(ui.lines().join('\n').includes('이전 답변'));assert(ui.lines().join('\n').includes('새 답변'));assert(!ui.lines().join('\n').includes('hidden source'));assert.equal(ui.buffer,'');
+});
