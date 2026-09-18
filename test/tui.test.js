@@ -118,3 +118,9 @@ test('wide landing centers the workspace and cursor, then conversation aligns ab
  assert(message>=0);assert.equal(box-message,2);assert(!text().includes('프론트엔드 작업을 시작하세요'));
  output.columns=32;output.rows=12;output.emit('resize');assert.equal(ui.composerWidth,31);
 });
+test('model picker filters and confirms a model without entering chat history',async t=>{
+ const {ui,input}=fixture(t);ui.buffer='기존 초안';ui.cursor=5;
+ const answer=ui.choose('모델 검색',[{value:'alpha',label:'alpha'},{value:'beta',label:'beta'},{value:'',label:'직접 입력'}]);
+ input.write('bet');assert.equal(ui.selection().length,1);input.write('\r');assert.equal(await answer,'beta');assert.equal(ui.buffer,'기존 초안');assert.equal(ui.history.length,0);
+ const controller=new AbortController();const pending=ui.choose('모델 검색',[{value:'alpha',label:'alpha'}],{signal:controller.signal});controller.abort();await assert.rejects(pending,/Cancelled/);assert.equal(ui.buffer,'기존 초안');
+});

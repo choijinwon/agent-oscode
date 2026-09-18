@@ -114,6 +114,7 @@ export class ConsoleUI extends EventEmitter {
     this.hint = '취소한 요청을 복구했습니다. 수정 후 Enter로 다시 전송하세요.'; this.render();
   }
   shortcuts() {
+    if (this.pending?.choices) return ' 이름 검색 · ↑↓ 선택 · Enter 확정 · Ctrl+C 취소';
     if (this.overlay) return ' ↑↓ 선택 · Enter 입력창에 넣기 · Esc 돌아가기';
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
     if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
@@ -121,6 +122,7 @@ export class ConsoleUI extends EventEmitter {
     return this.multiline ? ' Enter 줄바꿈 · F5 전송 · F3 한 줄 모드 · Ctrl+A/E 줄 처음/끝' : ' Enter 전송 · Ctrl+J 줄바꿈 · F3 여러 줄 모드 · Tab 완성';
   }
   menu() {
+    if (this.pending?.choices) return this.selection().map(item=>item.label);
     if (this.overlay) return this.choices().map(item => item.label);
     if (!this.pending || this.pending.hidden || this.pending.label !== chatPrompt) return [];
     const prefix = chars(this.buffer).slice(0, this.cursor).join('');
@@ -129,6 +131,12 @@ export class ConsoleUI extends EventEmitter {
     if (!this.buffer.startsWith('/') || this.buffer.includes('\n')) return [];
     return [...chatCommands, '/status', '/verbose', '/connect', '/diff'].filter((v,i,a)=>a.indexOf(v)===i && v.startsWith(this.buffer));
   }
+  choose(label, choices, {signal} = {}) {
+    const result=this.ask(label,false,signal);
+    if(this.pending) { this.pending.choices=choices;this.menuIndex=0;this.render(); }
+    return result;
+  }
+  selection() { return (this.pending?.choices || []).filter(item=>item.label.toLowerCase().includes(this.buffer.toLowerCase())); }
   question(label, { signal } = {}) { return this.ask(label, false, signal); }
   questionHidden(label, { signal } = {}) { return this.ask(label, true, signal); }
   ask(label, hidden, signal) {
@@ -181,10 +189,11 @@ export class ConsoleUI extends EventEmitter {
     this.hint='';
     const menu=this.menu();
     if (key.name === 'tab' && !this.overlay && !this.completionOpen && menu.length) { this.completionOpen = true; this.menuIndex = 0; this.render(); return; }
-    if(menu.length && (this.overlay || this.completionOpen) && ['up','down','tab'].includes(key.name)) {
+    if(menu.length && (this.overlay || this.pending?.choices || this.completionOpen) && ['up','down','tab'].includes(key.name)) {
       const direction=key.name==='up'?-1:1;this.menuIndex=(this.menuIndex+direction+menu.length)%menu.length;this.render();return;
     }
     if (key.name==='return' && !key.meta && !key.shift) {
+      if (this.pending?.choices) { const choice=this.selection()[Math.max(0,this.menuIndex)]; if(choice)this.finish(choice.value);return; }
       if (this.overlay) { const choice = this.choices()[Math.max(0,this.menuIndex)]; if (choice) this.closeOverlay(choice); return; }
       if(this.completionOpen && menu.length && this.menuIndex>=0){this.completionOpen=false;this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;this.render();return;}
       if(this.pending) this.finish(this.buffer); else {this.hint='작업 중입니다. 초안을 편집하고 완료 후 전송하세요.';this.render();} return;
@@ -212,7 +221,7 @@ export class ConsoleUI extends EventEmitter {
     else if (key.name==='backspace') {const p=chars(this.buffer);if(this.cursor>0)p.splice(--this.cursor,1);this.buffer=p.join('');}
     else if (key.name==='delete') {const p=chars(this.buffer);p.splice(this.cursor,1);this.buffer=p.join('');}
     else if (text && !key.ctrl && !key.meta) this.insert(safe(text));
-    this.completionOpen=false; this.menuIndex=this.overlay ? 0 : -1;this.render();
+    this.completionOpen=false; this.menuIndex=this.overlay || this.pending?.choices ? 0 : -1;this.render();
   }
   render() {
     if(this.closed)return;
@@ -236,7 +245,7 @@ export class ConsoleUI extends EventEmitter {
     if(cursorRow<this.inputOffset)this.inputOffset=cursorRow;
     if(cursorRow>=this.inputOffset+inputHeight)this.inputOffset=cursorRow-inputHeight+1;
     const first=this.inputOffset;
-    const menu=this.overlay || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
+    const menu=this.overlay || this.pending?.choices || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);

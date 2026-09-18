@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { listModels, chooseModel } from '../src/model-list.js';
 import { SelectedContext } from '../src/selected-context.js';
 import { RepairFlow } from '../src/repair.js';
 import { ConsoleUI } from '../src/tui.js';
@@ -395,7 +396,13 @@ async function main() {
           const previousBase = provider === config.provider ? config.baseUrl : undefined;
           const base = (await rl.question(`API 주소 [${previousBase || defaultBase(provider)}]: `, { signal: active.signal })).trim() || previousBase || defaultBase(provider);
           endpoint(base, provider === 'anthropic' ? 'messages' : 'chat/completions');
-          const model = (await rl.question(`모델 ID [${config.model || '미설정'}]: `, { signal: active.signal })).trim() || config.model;
+          let models=[];
+          print('사용 가능한 모델 목록을 조회합니다…');
+          try { const result=await listModels({provider,baseUrl:base,signal:active.signal});models=result.models;if(result.partial)print('일부 모델만 표시됩니다. 목록에 없으면 직접 입력하세요.'); }
+          catch(error) { if(active.signal.aborted)throw error;print(error.message); }
+          const current=provider===config.provider && base===(config.baseUrl || defaultBase(config.provider)) ? config.model : '';
+          let model=await chooseModel(rl,models,current,active.signal,print);
+          if(!model) model=(await rl.question('모델 ID 직접 입력: ',{signal:active.signal})).trim();
           if (!model) throw new Error('모델 ID를 입력하세요.');
           config.provider = provider; config.baseUrl = base; config.model = model;
           print('현재 채팅의 모델 설정을 변경했습니다. /key로 키를 저장하거나 자연어 요청을 입력하세요.');

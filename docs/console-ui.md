@@ -159,3 +159,21 @@ commands and composer in the center of the terminal. After the first conversatio
 entry, the layout uses the available height and keeps recent short conversations
 immediately above the composer. Header, wrapped conversation and input share the
 same centered column (at most 100 cells); narrow terminals use their full width.
+
+## Model selection in settings
+
+After provider and API URL confirmation, `/settings` fetches that endpoint's
+`/models` catalog (10-second timeout; no generation request). In the full-screen
+console, type to filter model IDs, use arrows to choose and Enter to confirm.
+The current model is an option only for the same provider and URL. Choose
+`직접 입력` for models absent from the catalog or when discovery is unavailable.
+`--simple` prints a numbered list and also accepts an explicit model ID.
+
+Discovery uses the same stored/environment credentials as model requests and
+rejects redirects. Lists are bounded to 1,000 IDs / 4 MB; pagination beyond the
+returned page is not automatically fetched. Listing does not guarantee tool-call
+support, account access or available quota. Ctrl+C cancels without committing
+partial changes. Settings still apply to the current chat process.
+
+Catalog formats: [Claude Models API](https://platform.claude.com/docs/en/api/models)
+and [OpenRouter Models API](https://openrouter.ai/docs/api/api-reference/models/get-models).
