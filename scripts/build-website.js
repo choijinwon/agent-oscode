@@ -10,11 +10,12 @@ if (!origin.startsWith('https://')) throw new Error('Website URL must use HTTPS'
 const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const preview = process.env.CONTEXT && process.env.CONTEXT !== 'production';
 await mkdir(output, { recursive: true });
-for (const file of ['index.html', 'robots.txt', 'sitemap.xml']) {
+for (const file of ['index.html', 'docs.html', 'robots.txt', 'sitemap.xml']) {
   let content = (await readFile(path.join(source, file), 'utf8'))
     .replaceAll('https://oscode-terminal.abyys9114.chatgpt.site', origin)
+    .replaceAll('https://agent-oscode.netlify.app', origin)
     .replace(/"softwareVersion":"[^"]+"/, `"softwareVersion":"${version}"`);
-  if (preview && file === 'index.html') content = content.replace('index,follow,max-snippet:-1', 'noindex,nofollow');
+  if (preview && file.endsWith('.html')) content = content.replace('index,follow,max-snippet:-1', 'noindex,nofollow');
   if (preview && file === 'robots.txt') content = 'User-agent: *\nDisallow: /\n';
   await writeFile(path.join(output, file), content);
 }
