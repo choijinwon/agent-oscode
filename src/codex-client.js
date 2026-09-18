@@ -7,7 +7,7 @@ import path from 'node:path';
 
 export const codexHome=()=>path.join(os.homedir(),'.oscode','codex');
 export const bridgeConfig={
- 'approval_policy':'never','sandbox_mode':'read-only','web_search':'disabled',
+ 'approval_policy':'never','default_permissions':'oscode-bridge','web_search':'disabled',
  'cli_auth_credentials_store':'file','forced_login_method':'chatgpt',
  'features.shell_tool':false,'features.unified_exec':false,'features.apps':false,
  'features.multi_agent':false,'features.hooks':false,'features.browser_use':false,
@@ -18,6 +18,14 @@ export const bridgeConfig={
  'features.workspace_dependencies':false,'features.sleep_tool':false,
  'features.goals':false,'features.shell_snapshot':false,'analytics.enabled':false
 };
+export function codexError(method, error) {
+ const detail=String(error?.message || '상세 원인 없음')
+  .replace(/\b(?:sk-[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_.-]+)/g,'[인증정보 숨김]')
+  .replace(/(Bearer\s+)\S+/gi,'$1[숨김]')
+  .replace(/(https?:\/\/[^\s?]+)\?[^\s]+/g,'$1?[숨김]')
+  .replace(/[\x00-\x1f\x7f]/g,' ').slice(0,800);
+ return new Error(`Codex ${method} 실패${Number.isFinite(error?.code) ? ` (${error.code})` : ''}: ${detail}`);
+}
 export class CodexClient extends EventEmitter {
  constructor(child){
   super();this.child=child;this.pending=new Map();this.sequence=0;this.buffer='';this.closed=false;
@@ -30,7 +38,7 @@ export class CodexClient extends EventEmitter {
     if(message.method && message.id!==undefined) { // No native tools or permission escalation in the model bridge.
      this.send({id:message.id,error:{code:-32601,message:'Native tool requests are disabled; return OSCODE actions in the output schema.'}});
     } else if(message.id!==undefined) {
-     const job=this.pending.get(message.id);if(job){this.pending.delete(message.id);job.cleanup();message.error ? job.reject(new Error('Codex 요청 실패. 로그인·모델·런타임 버전을 확인하세요.')) : job.resolve(message.result);}
+     const job=this.pending.get(message.id);if(job){this.pending.delete(message.id);job.cleanup();message.error ? job.reject(codexError(job.method,message.error)) : job.resolve(message.result);}
     } else if(message.method)this.emit('notification',message);
    }
   });
@@ -46,7 +54,7 @@ export class CodexClient extends EventEmitter {
    const id=++this.sequence;
    const stop=()=>{this.pending.delete(id);cleanup();reject(new Error('Codex 요청 취소 또는 시간 초과'));};
    const timer=setTimeout(stop,timeout);const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',stop);};
-   this.pending.set(id,{resolve,reject,cleanup});signal?.addEventListener('abort',stop,{once:true});this.send({id,method,params});
+   this.pending.set(id,{resolve,reject,cleanup,method});signal?.addEventListener('abort',stop,{once:true});this.send({id,method,params});
   });
  }
  wait(method,predicate=()=>true,signal,timeout=180000){
@@ -73,7 +81,8 @@ export async function startCodex({home=codexHome(),signal,spawnImpl=spawn}={}){
  let runtime;try{runtime=path.join(path.dirname(createRequire(import.meta.url).resolve('@openai/codex/package.json')),'bin/codex.js');}catch{throw new Error('공식 Codex 런타임이 없습니다. npm install을 실행하세요.');}
  const env={};for(const key of ['PATH','HOME','USER','TMPDIR','TEMP','TMP','SystemRoot','APPDATA','LOCALAPPDATA'])if(process.env[key])env[key]=process.env[key];
  env.CODEX_HOME=home;
- const args=[runtime,'app-server','--listen','stdio://',...Object.entries(bridgeConfig).flatMap(([key,value])=>['-c',`${key}=${JSON.stringify(value)}`])];
+ const profile=['-c',`permissions.oscode-bridge.filesystem={ ":root" = "deny", ${JSON.stringify(cwd)} = "read" }`,'-c','permissions.oscode-bridge.network.enabled=false'];
+ const args=[runtime,'app-server','--listen','stdio://',...profile,...Object.entries(bridgeConfig).flatMap(([key,value])=>['-c',`${key}=${JSON.stringify(value)}`])];
  const client=new CodexClient(spawnImpl(process.execPath,args,{cwd,env,stdio:['pipe','pipe','pipe']}));client.cwd=cwd;
  const close=client.close.bind(client);client.close=async()=>{await close();await fs.rm(cwd,{recursive:true,force:true});};
  try{await client.request('initialize',{clientInfo:{name:'oscode',title:'OSCODE',version:'0.9.1'},capabilities:{experimentalApi:true}},signal);client.send({method:'initialized',params:{}});return client;}

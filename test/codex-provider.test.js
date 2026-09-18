@@ -44,8 +44,8 @@ test('model bridge confines native environment and returns host tool actions wit
  const client=fixture({reply:{content:'읽겠습니다',calls:[{name:'read_file',arguments:'{"path":"a.txt"}'}]}});
  const response=await createCodexProvider({connect:async()=>client}).complete(request,new AbortController().signal);
  assert.equal(response.calls[0].input.path,'a.txt');assert.equal(response.usage.input,50);assert.equal(response.usage.cacheRead,10);assert(client.closed);
- const start=client.requests.find(x=>x.method==='thread/start').params;assert.equal(start.sandbox,'read-only');assert.equal(start.ephemeral,true);assert.deepEqual(start.environments,[]);
- const turn=client.requests.find(x=>x.method==='turn/start').params;assert.equal(turn.sandboxPolicy.access.includePlatformDefaults,false);assert.deepEqual(turn.sandboxPolicy.access.readableRoots,['/isolated']);assert(turn.outputSchema);
+ const start=client.requests.find(x=>x.method==='thread/start').params;assert.equal(start.permissions,'oscode-bridge');assert(!('sandbox' in start));assert.equal(start.ephemeral,true);assert.deepEqual(start.environments,[]);
+ const turn=client.requests.find(x=>x.method==='turn/start').params;assert.equal(turn.permissions,'oscode-bridge');assert(!('sandboxPolicy' in turn));assert(turn.outputSchema);
 });
 test('invalid/unknown actions fail closed; output over target is marked truncated',async()=>{
  const signal=new AbortController().signal;
@@ -68,4 +68,25 @@ test('ChatGPT action bridge keeps OSCODE file approval and PLAN enforcement',asy
   else await runTurn({session,prompt:'create',config,provider,tools,signal:new AbortController().signal});
   assert.equal(approvals,plan ? 0 : 1);await assert.rejects(fs.stat(path.join(root,'new.txt')));
  }
+});
+
+test('production bridge requests are accepted by the installed official runtime', {timeout:30000}, async()=>{
+ const {startCodex}=await import('../src/codex-client.js');
+ const home=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'oscode-protocol-')));
+ let client,accepted=false;
+ const stop=new Error('Protocol acceptance verified; stop before model completion');
+ try {
+  client=await startCodex({home});
+  assert.equal((await client.request('account/read',{refreshToken:false})).account,null);
+  const rpc=client.request.bind(client);
+  client.request=async(method,params,signal,...rest)=>{
+   // Only bypass the host login guard. The isolated runtime has no account credentials.
+   if(method==='account/read')return {account:{type:'chatgpt'}};
+   const response=await rpc(method,params,signal,...rest);
+   if(method==='turn/start'){accepted=Boolean(response.turn?.id);throw stop;}
+   return response;
+  };
+  await assert.rejects(createCodexProvider({connect:async()=>client}).complete({...request,model:'gpt-5.4'},new AbortController().signal),error=>error===stop);
+  assert(accepted,'Actual turn/start must pass runtime schema validation');
+ } finally {await client?.close();await fs.rm(home,{recursive:true,force:true});}
 });
