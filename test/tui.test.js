@@ -114,7 +114,7 @@ test('wide landing and conversation keep composer at the bottom',async t=>{
  ui.append('짧은 답변');ui.renderedRows=[];clear();ui.render();
  const rows=text().split(/\x1b\[\d+;1H\x1b\[2K/).slice(1);
  const message=rows.findIndex(row=>row.includes('짧은 답변'));const box=rows.findIndex(row=>row.includes('╭'));
- assert(message>=0);assert(message<5);assert(box>40);assert(!text().includes('프론트엔드 작업을 시작하세요'));
+ assert(message>=0);assert.equal(box-message,2);assert(box>40);assert(!text().includes('프론트엔드 작업을 시작하세요'));
  output.columns=32;output.rows=12;output.emit('resize');assert.equal(ui.composerWidth,31);
 });
 test('model picker filters and confirms a model without entering chat history',async t=>{
@@ -201,12 +201,12 @@ test('toolbar has no actions in secret entry and disables mouse tracking on clos
  ui.key('',{name:'f10'});assert(ui.pending.hidden);input.write('fake\r');await answer;ui.close();assert(text().includes('\x1b[?1000l\x1b[?1006l'));
 });
 
-test('short chats stay near header while composer stays fixed through output and scrolling',t=>{
+test('short chats grow upward from the fixed composer through output and scrolling',t=>{
  const {ui,output}=fixture(t);output.columns=180;output.rows=80;
  ui.entries=[{type:'user',text:'하이'},{type:'assistant',text:'안녕하세요!'}];ui.render();
  const rows=ui.renderedRows;const header=rows.findIndex(r=>r.includes('agent-oscode')||r.includes('workspace'));
  const user=rows.findIndex(r=>r.includes('하이'));const answer=rows.findIndex(r=>r.includes('안녕하세요!'));const composer=rows.findIndex(r=>r.includes('╭'));
- assert(user-header<6);assert(answer-user<=4);assert.equal(composer,output.rows-7);assert(ui.buttons.every(b=>b.y===output.rows-2));
+ assert(user-header>50);assert(answer-user<=4);assert.equal(composer-answer,2);assert.equal(composer,output.rows-7);assert(ui.buttons.every(b=>b.y===output.rows-2));
  ui.entries.push({type:'assistant',text:'긴 답변\n'.repeat(100)});ui.render();assert(ui.renderedRows.some(r=>r.includes('╭')));ui.key('',{name:'pageup'});assert(ui.scroll>0);assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),composer);
  output.rows=40;output.emit('resize');assert.equal(ui.renderedRows.findIndex(r=>r.includes('╭')),33);
 });
@@ -246,4 +246,15 @@ test('preview button opens command while preserving the unsent draft',async t=>{
  const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('수정 중인 요청');const cursor=ui.cursor;
  ui.buttonAction('preview');assert.equal(await answer,'/preview');assert.equal(ui.buffer,'수정 중인 요청');assert.equal(ui.cursor,cursor);
  const prompt=ui.question('개발 서버 주소');input.write('http://localhost:5173\r');await prompt;assert.equal(ui.buffer,'수정 중인 요청');
+});
+
+test('new messages push older messages upward while composer stays fixed',t=>{
+ const {ui,output}=fixture(t);output.rows=40;
+ ui.appendAnswer('첫 답변');
+ const before=ui.renderedRows.findIndex(row=>row.includes('첫 답변'));
+ const composer=ui.renderedRows.findIndex(row=>row.includes('╭'));
+ ui.mutate(()=>ui.entries.push({type:'user',text:'다음 질문'}));ui.appendAnswer('두 번째 답변');
+ assert(ui.renderedRows.findIndex(row=>row.includes('첫 답변'))<before);
+ assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),composer);
+ assert.equal(composer-ui.renderedRows.findIndex(row=>row.includes('두 번째 답변')),2);
 });

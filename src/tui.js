@@ -404,13 +404,13 @@ export class ConsoleUI extends EventEmitter {
       body=welcome.slice(0,bodyHeight);
       while(body.length<bodyHeight)body.push('');
     } else {
-      // Keep messages near the header; reserve the remaining space above the fixed composer.
-      while(body.length<bodyHeight)body.push('');
+      // Anchor the newest conversation row above the fixed composer; older rows grow upward.
+      while(body.length<bodyHeight)body.unshift('');
     }
     const rows=[accent(line(` OSCODE  /  ${s.directory||s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
       if(home && i===1)return accent(line(' '+t));
-      const index=i;
-      if(!home && !this.settingsView && index<end-start) {
+      const index=i-(bodyHeight-(end-start));
+      if(!home && !this.settingsView && index>=0 && index<end-start) {
         const row=styled[start+index];const track=all.length>bodyHeight;
         const thumb=Math.max(1,Math.floor(bodyHeight*bodyHeight/all.length));
         const thumbTop=Math.round(start/Math.max(1,all.length-bodyHeight)*(bodyHeight-thumb));
