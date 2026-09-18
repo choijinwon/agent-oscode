@@ -55,17 +55,18 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 ## 콘솔 챗봇
 
-기본 실행은 계속 대화할 수 있는 콘솔 채팅창을 엽니다. 키가 없어도 시작할 수 있습니다.
+기본 실행은 계속 대화할 수 있는 콘솔 채팅창을 엽니다. 키가 없어도 시작할 수 있습니다. 시작 화면에는 프로젝트·모델 상태와 주요 명령만 표시합니다. 입력은 `›`, 답변은 `OSCODE` 영역에 표시되며 `/status`로 세션·예산을, `/verbose`로 상세 도구 출력을 확인할 수 있습니다.
 
 ```text
-나 [LOCAL · BUILD] › /settings
+› /settings
 공급자 [anthropic]:
 API 주소 [https://api.anthropic.com/v1]:
 모델 ID [미설정]: 사용할_모델_ID
-나 [...] › /key
+› /key
 API 키 (숨김 입력, Ctrl+C 취소):
-나 [...] › 로그인 화면의 접근성을 확인해줘
-oscode › ...
+› 로그인 화면의 접근성을 확인해줘
+OSCODE
+...
 ```
 
 `/settings`의 공급자·모델 선택은 현재 채팅에 적용됩니다. `/key`로 저장한 키는 다음 실행에도 사용할 수 있습니다. `/key status`로 저장 여부 확인, `/key remove`로 삭제, `/exit`로 종료합니다. 키 입력 중 Ctrl+C를 누르면 채팅으로 돌아옵니다. 실제 AI 답변에는 연결된 모델이 필요합니다.
