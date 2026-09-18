@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough, Writable } from 'node:stream';
-import { createChatConsole } from '../src/chat-console.js';
+import { createChatConsole, completeCommand } from '../src/chat-console.js';
 
 test('single chat reader hides secrets, disables history and returns to normal input',async()=>{
  const input=new PassThrough(); input.isTTY=true; input.setRawMode=()=>{};
@@ -22,4 +22,10 @@ test('cancelled hidden input restores normal display',async()=>{
   await assert.rejects(secret,/abort/i);assert(!visible.includes('partial-secret'));
   const normal=rl.question('나 › ');input.write('hi\r');assert.equal(await normal,'hi');assert(visible.includes('hi'));
  }finally{rl.close();}
+});
+
+test('slash completion is restricted to commands and leaves natural language alone',()=>{
+ assert.deepEqual(completeCommand('/set'),[['/settings'],'/set']);
+ assert.deepEqual(completeCommand('로그인 페이지'),[[],'로그인 페이지']);
+ assert.deepEqual(completeCommand('/unknown'),[[],'/unknown']);
 });

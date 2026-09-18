@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { welcome, inputFrame, chatPrompt, answerHeading, toolStatus, turnFooter } from '../src/terminal-view.js';
+import { welcome, inputFrame, chatPrompt, renderAnswerHeading, toolStatus, turnFooter } from '../src/terminal-view.js';
 import { createChatConsole } from '../src/chat-console.js';
 import { setCredential, getCredential, defaultBase } from '../src/credentials.js';
 import { endpoint } from '../src/providers.js';
@@ -114,7 +114,7 @@ async function main() {
   if (args['ui-preview']) {
     process.stdout.write(welcome({ root: 'my-frontend-app', model: '미리보기', plan: false, connected: false, agent: 'frontend' }));
     print('  UI 미리보기 — 아래 대화는 예시입니다. API 호출·파일 수정 없음.\n\n  나 › 로그인 폼을 반응형 컴포넌트로 만들어줘');
-    process.stdout.write(answerHeading);
+    process.stdout.write(renderAnswerHeading());
     print('  기존 컴포넌트와 스타일을 확인한 뒤 구현하겠습니다.\n  모바일 레이아웃과 키보드 접근성도 함께 검토하겠습니다.');
     process.stdout.write(inputFrame({ plan: false, connected: false }) + chatPrompt + '\n');
     return;
@@ -280,8 +280,8 @@ async function main() {
   let verbose = Boolean(args.verbose);
   let answerStarted = false;
   const emit = (kind, data) => {
-    if ((kind === 'delta' || kind === 'text') && !answerStarted) { process.stdout.write(interactive ? answerHeading : '\noscode › '); answerStarted = true; }
-    if (kind === 'request') answerStarted = false;
+    if ((kind === 'delta' || kind === 'text') && !answerStarted) { process.stdout.write(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
+    if (kind === 'request') { answerStarted = false; if (interactive && !verbose) print('  · 응답 준비 중…'); }
     if (kind === 'delta') process.stdout.write(clean(data));
     if (kind === 'stream_end') print('');
     if (kind === 'text' || kind === 'notice') print(data);
@@ -315,7 +315,7 @@ async function main() {
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
     if (args.prompt) { await execute(args.prompt); return; }
     if (!rl) throw new Error('비대화형 실행은 --prompt를 지정하세요.');
-    print('  메시지를 입력하세요. 실행 취소는 Ctrl+C.');
+    print('  Enter 전송 · 실행 중 Ctrl+C 취소');
     while (!rl.closed) {
       let input;
       process.stdout.write(inputFrame({ model: config.model, plan: config.plan, connected: !connectionStatus(), draft: Boolean(pasteDraft.text) }));

@@ -16,32 +16,35 @@ function theme({ columns = process.stdout.columns || 80, color = Boolean(process
   return { width, dim: text => paint('90', text), accent: text => paint('1;36', text), bold: text => paint('1', text) };
 }
 export function welcome({ root, model, plan, connected, agent = 'general', budget = 40000, ...options }) {
-  const t = theme(options), inside = t.width - 4;
-  const row = (value, style = x => x) => {
-    const text = fit(value, inside);
-    return t.dim('│ ') + style(text) + ' '.repeat(inside - displayWidth(text)) + t.dim(' │');
-  };
-  return ['\n' + t.dim('╭' + '─'.repeat(t.width - 2) + '╮'),
-    row('OSCODE  /  FRONTEND CODING AGENT', t.accent),
-    row(path.basename(root) || root, t.bold),
-    row(`${plan ? 'PLAN' : 'BUILD'}  ·  ${agent}  ·  ${connected ? model : 'LOCAL / 모델 미연결'}`),
-    t.dim('├' + '─'.repeat(t.width - 2) + '┤'),
-    row('어떤 화면을 함께 만들까요?', t.bold),
-    row('컴포넌트 구현부터 접근성 검사까지, 자연어로 요청하세요.'),
-    row(''), row('/settings  모델 선택     /key   API 키 설정'),
-    row('/frontend  프로젝트 분석 /help  모든 명령'),
-    row(''), row(`요청당 예산 ${Number(budget).toLocaleString('en-US')} tokens · /status 상세 상태`, t.dim),
-    t.dim('╰' + '─'.repeat(t.width - 2) + '╯'), ''].join('\n');
+  const t = theme(options);
+  const line = text => '  ' + fit(text, t.width - 2);
+  const rule = t.dim('  ' + '─'.repeat(t.width - 2));
+  const commands = t.width >= 58
+    ? ['시작하기', '/frontend  프로젝트 살펴보기    /settings  모델 연결', '/paste     코드 붙여넣기        /help      전체 명령']
+    : ['시작하기', '/frontend  프로젝트 살펴보기', '/settings  모델 연결', '/paste     코드 붙여넣기', '/help      전체 명령'];
+  return [
+    '', t.accent(line('▰ OSCODE')),
+    t.dim(line('FRONTEND CODING COMPANION')), '',
+    t.bold(line(path.basename(root) || root)),
+    t.dim(line(`${agent}  /  ${plan ? '계획' : '구현'}  /  예산 ${Number(budget).toLocaleString('en-US')}`)),
+    line(connected ? `모델  ${model}` : '로컬 모드 · 키 없이 프로젝트를 둘러보세요'), '', rule, '',
+    t.bold(line('무엇을 만들고 싶으세요?')),
+    t.dim(line('예: 로그인 폼을 모바일에서도 쓰기 편하게 바꿔줘')), '',
+    ...commands.map((value, index) => index === 0 ? t.bold(line(value)) : line(value)),
+    '', rule, t.dim(line('Tab 명령 완성 · /key 키 입력 · /exit 종료')), ''
+  ].join('\n');
 }
 export function inputFrame({ model, plan, connected, draft = false, ...options }) {
   const t = theme(options);
-  const label = fit(`${plan ? 'PLAN' : 'BUILD'} · ${connected ? model : 'LOCAL'}${draft ? ' · 붙여넣기 초안 있음' : ''}`, t.width - 4);
-  return '\n' + t.dim('─'.repeat(t.width)) + '\n' + t.dim(`  ${label}`) + '\n' + t.dim(fit('  Enter 전송 · /paste 붙여넣기 · Ctrl+C 취소 · /exit 종료', t.width)) + '\n';
+  const label = fit(`${plan ? 'PLAN' : 'BUILD'}  /  ${connected ? model : 'LOCAL'}${draft ? '  /  초안 준비됨 → /send' : ''}`, t.width - 4);
+  return '\n' + t.dim('  ' + '─'.repeat(t.width - 2)) + '\n' + t.accent(`  ${label}`) + '\n';
 }
+export function renderAnswerHeading(options) { return '\n' + theme(options).accent('  OSCODE') + '\n\n'; }
 export const chatPrompt = '  › ';
 export const answerHeading = '\n  ◇ OSCODE\n\n';
+const toolLabels = { read_file: '코드 읽기', list_files: '파일 탐색', search: '코드 검색', edit_file: '코드 수정', write_file: '파일 생성', frontend_context: '컴포넌트 분석', frontend_inspect: '프로젝트 분석', shell: '명령 실행', analysis_checkpoint: '분석 메모 저장', ui_check: '화면 검사' };
 export function toolStatus({ name, is_error, content }) {
-  return `  ${is_error ? '실패' : '완료'} · ${safe(name)}${is_error ? `\n  ${fit(content, 140)}` : ''}`;
+  return `  ${is_error ? '실패' : '완료'} · ${toolLabels[name] || safe(name)}${is_error ? `\n  ${fit(content, 140)}` : ''}`;
 }
 export function turnFooter(usage) {
   return `\n  토큰 ${Number(usage.input || 0).toLocaleString('en-US')} 입력 · ${Number(usage.output || 0).toLocaleString('en-US')} 출력${usage.estimated ? ' (추정 포함)' : ''}`;
