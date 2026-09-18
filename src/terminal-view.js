@@ -36,11 +36,11 @@ export function welcome({ root, model, plan, connected, agent = 'general', budge
 }
 export function inputFrame({ model, plan, connected, draft = false, ...options }) {
   const t = theme(options);
-  const label = fit(`${plan ? 'PLAN' : 'BUILD'}  /  ${connected ? model : 'LOCAL'}${draft ? '  /  초안 준비됨 → /send' : ''}`, t.width - 4);
-  return '\n' + t.dim('  ' + '─'.repeat(t.width - 2)) + '\n' + t.accent(`  ${label}`) + '\n';
+  const label = fit(`${plan ? 'PLAN · 계획' : 'BUILD · 구현'}  /  ${connected ? model : 'LOCAL'}${draft ? '  /  초안 준비됨' : ''}`, t.width - 4);
+  return '\n' + t.dim('  ╭' + '─'.repeat(t.width - 3)) + '\n' + t.accent(`  │ ${label}`) + '\n' + t.dim('  │ ' + fit(draft ? '/draft 확인 · /send 전송 · /clear 취소' : '메시지 입력 · Enter 전송 · Tab 명령 완성', t.width - 4)) + '\n';
 }
 export function renderAnswerHeading(options) { return '\n' + theme(options).accent('  OSCODE') + '\n\n'; }
-export const chatPrompt = '  › ';
+export const chatPrompt = '  ╰─ › ';
 export const answerHeading = '\n  ◇ OSCODE\n\n';
 const toolLabels = { read_file: '코드 읽기', list_files: '파일 탐색', search: '코드 검색', edit_file: '코드 수정', write_file: '파일 생성', frontend_context: '컴포넌트 분석', frontend_inspect: '프로젝트 분석', shell: '명령 실행', analysis_checkpoint: '분석 메모 저장', ui_check: '화면 검사' };
 export function toolStatus({ name, is_error, content }) {

@@ -11,13 +11,26 @@ export function completeCommand(line) {
 // second readline listener or its history.
 export function createChatConsole(input = process.stdin, output = process.stdout) {
   let hidden = false;
+  let asking = false;
   const display = new Writable({ write(chunk, encoding, done) {
     if (!hidden) output.write(chunk, encoding);
     done();
   } });
-  Object.defineProperty(display, 'columns', { get: () => output.columns });
+  Object.defineProperty(display, 'columns', { get: () => output.columns || 80 });
+  Object.defineProperty(display, 'rows', { get: () => output.rows || 24 });
   display.isTTY = Boolean(output.isTTY);
   const rl = readline.createInterface({ input, output: display, terminal: true, historySize: 0, completer: line => hidden ? [[], line] : completeCommand(line) });
+  // readline listens to its output's resize event. Forward the real TTY event
+  // through our secret-masking stream, preserving the editing cursor and wraps.
+  const resize = () => { if (asking) display.emit('resize'); };
+  output.on('resize', resize);
+  const question = rl.question.bind(rl);
+  rl.question = async (...args) => {
+    asking = true;
+    try { return await question(...args); }
+    finally { asking = false; }
+  };
+  rl.once('close', () => output.off('resize', resize));
   rl.questionHidden = async (prompt, options) => {
     output.write(prompt);
     hidden = true;
