@@ -52,7 +52,7 @@ export class ConsoleUI extends EventEmitter {
     input.on('keypress', this.keyListener); output.on('resize', this.resizeListener);
     this.endListener = () => this.close(); input.on('end', this.endListener);
     input.setRawMode?.(true); input.resume();
-    output.write('\x1b[?1049h\x1b[?2004h');
+    output.write('\x1b[?1049h\x1b[?2004h\x1b[?1000h\x1b[?1006h');
     this.render();
   }
   get width() { return Math.max(10, (this.output.columns || 80) - 1); }
@@ -128,6 +128,7 @@ export class ConsoleUI extends EventEmitter {
     this.menuIndex = -1; this.hint = ''; this.render();
   }
   choices() {
+    if(this.overlay?.kind==='files') return this.files.filter(file=>file.toLowerCase().includes(this.buffer.toLowerCase())).slice(0,100).map(file=>({text:`${this.overlay.buffer}${this.overlay.buffer && !/\s$/.test(this.overlay.buffer)?' ':''}@${/\s/.test(file)?JSON.stringify(file):file} `,label:file,pasted:this.overlay.hasPaste}));
     if (this.overlay?.kind === 'palette') return searchCommands(this.buffer).map(([text, label]) => ({text, label: `${label}  ${text}`, pasted: false}));
     if (this.overlay?.kind === 'history') return [...this.history].reverse().filter(item => item.text.toLowerCase().includes(this.buffer.toLowerCase())).map(item => ({...item, label: item.text.replace(/\n/g, ' ↵ ')}));
     return [];
@@ -217,11 +218,41 @@ export class ConsoleUI extends EventEmitter {
     if (Buffer.byteLength(this.buffer) + Buffer.byteLength(text) > 65536) { this.hint = '입력은 64 KiB 이내로 나눠주세요.'; return; }
     const parts = chars(this.buffer);parts.splice(this.cursor,0,...chars(text));this.buffer=parts.join('');this.cursor+=chars(text).length;
   }
+  buttonAction(action) {
+    if(this.closed || this.overlay || this.settingsView || this.pending && !this.pending.normal)return;
+    if(action==='stop'){if(!this.pending)this.emit('SIGINT');return;}
+    if(!this.pending?.normal)return;
+    if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
+    if(action==='attach'){this.openOverlay('files');return;}
+    if(action==='mode'){this.emit('toggleMode');this.render();return;}
+    if(action==='settings') {
+      const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
+      this.finish('/settings');Object.assign(this,draft);this.render();
+    }
+  }
+  mouse(sequence) {
+    const match=sequence.match(/^(\d+);(\d+);(\d+)([Mm])$/);if(!match||match[4]!=='M')return;
+    const [,button,x,y]=match;
+    if(Number(button)===64){this.key('',{name:'pageup'});return;}
+    if(Number(button)===65){this.key('',{name:'pagedown'});return;}
+    if(Number(button)!==0)return;
+    const hit=this.buttons?.find(b=>Number(y)===b.y && Number(x)>=b.x && Number(x)<b.x+b.width);
+    if(hit)this.buttonAction(hit.action);
+  }
   key(text = '', key) {
     if (this.closed) return;
     if (key.name === 'paste-start') { this.completionOpen = false; this.menuIndex = -1; this.pasting = true; this.hasPaste = true; this.pasteText = ''; return; }
     if (key.name === 'paste-end') { this.pasting = false; this.insert(safe(this.pasteText)); this.pasteText = ''; this.render(); return; }
     if (this.pasting) { if (text && this.pasteText.length <= 65536) this.pasteText += text.replace(/\r/g,'\n'); return; }
+    if(key.sequence==='\x1b[<'){this.mouseBuffer='';return;}
+    if(this.mouseBuffer!==undefined) {
+      this.mouseBuffer+=text||key.sequence||'';
+      if(/[Mm]$/.test(this.mouseBuffer)){const value=this.mouseBuffer;this.mouseBuffer=undefined;this.mouse(value);}
+      else if(this.mouseBuffer.length>32||!/^[0-9;]*$/.test(this.mouseBuffer))this.mouseBuffer=undefined;
+      return;
+    }
+    if(key.name==='f9'){this.buttonAction('attach');return;}
+    if(key.name==='f10'){this.buttonAction('settings');return;}
     if (['f6','f7','f8'].includes(key.name)) { return this.copyContent({f6:'answer',f7:'code',f8:'draft'}[key.name]); }
     if (key.ctrl && key.name === 'c') { if (this.overlay) this.closeOverlay(); else this.emit('SIGINT'); return; }
     if (key.ctrl && ['r','p'].includes(key.name)) { this.openOverlay(key.name === 'r' ? 'history' : 'palette'); return; }
@@ -304,7 +335,9 @@ export class ConsoleUI extends EventEmitter {
     const prefix=pending?.hidden ? draft : chars(this.buffer).slice(0,this.cursor).join('');
     const position=cursorPositions(prefix,box-4).at(-1);const cursorRow=position.row;
     while(draftLines.length<=cursorRow)draftLines.push('');
-    const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9));
+    const toolbar=!this.overlay && !this.settingsView && (!pending || pending.normal) && h>=12 && box>=28;
+    const toolbarHeight=toolbar?1:0;
+    const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9-toolbarHeight));
     this.inputOffset=Math.max(0,Math.min(this.inputOffset,Math.max(0,draftLines.length-inputHeight)));
     if(cursorRow<this.inputOffset)this.inputOffset=cursorRow;
     if(cursorRow>=this.inputOffset+inputHeight)this.inputOffset=cursorRow-inputHeight+1;
@@ -312,8 +345,8 @@ export class ConsoleUI extends EventEmitter {
     const menu=this.overlay || this.pending?.choices || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const count=this.settingsView ? 6 : 3;
     const offset=Math.max(0,chosen-count+1);const options=menu.slice(offset,offset+count);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
-    const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8));
-    const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);
+    const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8-toolbarHeight));
+    const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6-toolbarHeight);
     const styled=this.transcriptRows();const all=styled.map(row=>row.text);this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
     let body=all.slice(start,end);
@@ -357,7 +390,7 @@ export class ConsoleUI extends EventEmitter {
       rows.push(selected?surface(value):muted(value));
     }
     const inputTop=rows.length;
-    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;
+    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;
     const label = fit(` ${title} `,box-2);
     rows.push(border(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
     for(let i=0;i<inputHeight;i++) {
@@ -365,6 +398,25 @@ export class ConsoleUI extends EventEmitter {
       const value=placeholder ? '어떤 작업을 할까요?  @파일로 범위를 지정하세요' : draftLines[first+i]||'';
       const content=fit(value,box-4);
       rows.push(`${border('│')}${surface('  '+content+' '.repeat(Math.max(0,box-4-displayWidth(content))))}${border('│')}`);
+    }
+    this.buttons=[];
+    if(toolbar) {
+      const compact=box<65;
+      const items=[{action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
+        {action:'mode',label:`[${s.mode||'BUILD'}]`,enabled:Boolean(pending)},
+        {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},
+        {action:pending?'send':'stop',label:pending?'[↑ 전송]':'[■ 중단]',enabled:!pending||Boolean(this.buffer.trim())}];
+      let used=0;const segments=[];
+      for(const item of (box<40?items.filter(item=>['attach','send','stop'].includes(item.action)):items)) {
+        const width=displayWidth(item.label);
+        if(used+width>box-4)continue;
+        const gap=item===items.at(-1)?Math.max(0,box-4-used-width):0;
+        segments.push(' '.repeat(gap));used+=gap;
+        if(item.enabled)this.buttons.push({action:item.action,x:left+4+used,y:top+rows.length+1,width});
+        segments.push(item.enabled?accent(item.label):muted(item.label));used+=width;
+        if(used<box-4){segments.push(' ');used++;}
+      }
+      rows.push(border('│')+'  '+segments.join('')+' '.repeat(Math.max(0,box-4-used))+border('│'));
     }
     const positionLabel=draftLines.length>1 ? ` ${cursorRow+1}/${draftLines.length}줄 ` : '';
     const bottom=fit(positionLabel,box-2);
@@ -383,6 +435,6 @@ export class ConsoleUI extends EventEmitter {
     if(this.pending)this.finish(undefined,new Error('Closed.'));
     this.closed=true;this.input.off('keypress',this.keyListener);this.input.off('end',this.endListener);this.output.off('resize',this.resizeListener);
     this.input.setRawMode?.(this.oldRaw);this.input.pause();
-    this.output.write('\x1b[?2004l\x1b[?25h\x1b[?1049l');this.emit('close');
+    this.output.write('\x1b[?1000l\x1b[?1006l\x1b[?2004l\x1b[?25h\x1b[?1049l');this.emit('close');
   }
 }

@@ -180,3 +180,23 @@ test('whale animates during communication without changing draft or scroll and s
  ui.setCommunicating(false);assert.equal(ui.communicationLabel(),'대기');const frame=ui.communicationFrame;t.mock.timers.tick(1000);assert.equal(ui.communicationFrame,frame);
  ui.setCommunicating(true);ui.close();assert.equal(ui.communicationTimer,null);t.mock.timers.tick(1000);assert.equal(ui.communicationFrame,0);
 });
+
+test('mouse toolbar toggles mode, preserves draft through settings, and sends once on press',async t=>{
+ const {ui,input}=fixture(t);let toggles=0;ui.on('toggleMode',()=>toggles++);
+ const click=action=>{const b=ui.buttons.find(b=>b.action===action);assert(b,action);input.write(`\x1b[<0;${b.x};${b.y}M`);input.write(`\x1b[<0;${b.x};${b.y}m`);};
+ const answer=ui.question(chatPrompt);input.write('작성 중');click('mode');assert.equal(toggles,1);assert.equal(ui.buffer,'작성 중');
+ click('settings');assert.equal(await answer,'/settings');assert.equal(ui.buffer,'작성 중');
+ const next=ui.question(chatPrompt);click('send');assert.equal(await next,'작성 중');
+ assert.equal(ui.buffer,'');
+});
+test('attachment button selects a quoted project path; mouse bytes never enter draft',async t=>{
+ const {ui,input,output}=fixture(t);ui.files=['docs/my file.pdf'];const answer=ui.question(chatPrompt);input.write('설명 ');
+ ui.key('',{name:'f9'});assert.equal(ui.overlay.kind,'files');input.write('my file\r');assert.equal(ui.buffer,'설명 @"docs/my file.pdf" ');
+ input.write('\x1b[<0;');input.write('1;1M');assert.equal(ui.buffer,'설명 @"docs/my file.pdf" ');
+ output.columns=30;output.emit('resize');assert(ui.buttons.some(b=>b.action==='send'));assert(ui.buttons.every(b=>b.x+b.width<=output.columns));
+ input.write('\r');await answer;
+});
+test('toolbar has no actions in secret entry and disables mouse tracking on close',async t=>{
+ const {ui,input,text}=fixture(t);const answer=ui.questionHidden('API key');assert.deepEqual(ui.buttons,[]);
+ ui.key('',{name:'f10'});assert(ui.pending.hidden);input.write('fake\r');await answer;ui.close();assert(text().includes('\x1b[?1000l\x1b[?1006l'));
+});
