@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {taskReport,exportHandoff} from '../src/task-report.js';
 import {repositoryMap} from '../src/repository-map.js';
 import {ApprovalMode} from '../src/approval-mode.js';
 import {readAppearance,saveAppearance,appearanceUI} from '../src/appearance.js';
@@ -435,6 +436,13 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if(input==='/summary'){print(taskReport(session));continue;}
+      if(input==='/handoff'||input==='/handoff copy'){
+        try{
+          if(input==='/handoff copy'){await accessClipboard('write',taskReport(session,{handoff:true}));print('작업 인계 내용을 복사했습니다. 새 대화에 붙여넣고 다음 요청을 추가하세요.');}
+          else{const report=await exportHandoff(session);print(`작업 인계 파일: ${report.file}\n약 ${report.estimatedTokens} 토큰 (추정) · 모델 추가 호출 없음\n복사: /handoff copy · 최근 결과 보기: /summary`);}
+        }catch(error){print(`작업 인계 실패: ${error.message}`);}continue;
       }
       if(input==='/map'||input.startsWith('/map ')){
         active=new AbortController();screen?.setStage('코드 지도 생성 중');
