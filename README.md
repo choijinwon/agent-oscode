@@ -47,6 +47,12 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 [분석 체크포인트 사용법과 한계](docs/analysis-checkpoints.md)
 
+## 웹 화면 미리보기
+
+개발 서버를 실행한 뒤 `/preview http://localhost:3000`을 입력하면 기본 브라우저에서 웹 화면을 엽니다. 입력창 **미리보기** 버튼이나 `/preview` 명령도 사용할 수 있습니다. `oscode.json`의 `verify.url`이 있으면 그 주소를 사용하고, 없으면 입력받습니다. 현재 작성 중인 초안은 유지됩니다.
+
+localhost·127.0.0.1·IPv6 루프백 주소만 지원하며 포트와 경로를 지정할 수 있습니다. 이 기능은 서버를 자동 실행하지 않으므로 프로젝트의 개발 서버를 먼저 켜주세요. 좁은 화면에서 버튼이 생략되면 `/preview`를 사용하세요.
+
 ## 작업 폴더 지정
 
 ```bash

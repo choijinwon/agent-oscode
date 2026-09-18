@@ -241,3 +241,9 @@ test('clipboard errors preserve draft and delayed reads cannot leak into setting
  let resolve;ui.paste=()=>new Promise(r=>resolve=r);const pasting=ui.pasteContent();input.write('\r');await answer;
  const secret=ui.questionHidden('Key');resolve('private clipboard');await pasting;assert.equal(ui.buffer,'');input.write('\r');await secret;
 });
+
+test('preview button opens command while preserving the unsent draft',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('수정 중인 요청');const cursor=ui.cursor;
+ ui.buttonAction('preview');assert.equal(await answer,'/preview');assert.equal(ui.buffer,'수정 중인 요청');assert.equal(ui.cursor,cursor);
+ const prompt=ui.question('개발 서버 주소');input.write('http://localhost:5173\r');await prompt;assert.equal(ui.buffer,'수정 중인 요청');
+});

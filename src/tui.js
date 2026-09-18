@@ -257,9 +257,9 @@ export class ConsoleUI extends EventEmitter {
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
     if(action==='mode'){this.emit('toggleMode');this.render();return;}
-    if(action==='settings') {
+    if(action==='settings'||action==='preview') {
       const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
-      this.finish('/settings');Object.assign(this,draft);this.render();
+      this.finish(action==='preview'?'/preview':'/settings');Object.assign(this,draft);this.render();
     }
   }
   mouse(sequence) {
@@ -442,6 +442,7 @@ export class ConsoleUI extends EventEmitter {
       const compact=box<65;
       const items=[{action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
         {action:'copy',label:'[복사]',enabled:!this.copying},
+        {action:'preview',label:compact?'[웹]':'[미리보기]',enabled:Boolean(pending)},
         {action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
         {action:'mode',label:`[${s.mode||'BUILD'}]`,enabled:Boolean(pending)},
         {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {openWebPreview} from '../src/web-preview.js';
 import {workspacePath} from '../src/workspace-path.js';
 import { settingsUI } from '../src/settings-ui.js';
 import { listModels, chooseModel } from '../src/model-list.js';
@@ -110,7 +111,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
-작업 폴더: /cwd · /workspace <폴더 경로> · /cd <폴더 경로>\n이미지·PDF: /ocr <파일> · @파일로 질문에 첨부\n복사·붙여넣기: /copy [code] /paste /draft /send /clear
+웹 미리보기: /preview [http://localhost:포트]\n작업 폴더: /cwd · /workspace <폴더 경로> · /cd <폴더 경로>\n이미지·PDF: /ocr <파일> · @파일로 질문에 첨부\n복사·붙여넣기: /copy [code] /paste /draft /send /clear
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
 명령: /status /verbose [on|off] /settings /key [status|remove] /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
@@ -361,6 +362,16 @@ async function main(raw = process.argv.slice(2)) {
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
       if (input === '/exit') break;
+      if(input==='/preview'||input.startsWith('/preview ')) {
+        try {
+          let url=input.slice(8).trim()||config.verify?.url||'';
+          if(!url)url=await rl.question('개발 서버 주소 (예: http://localhost:3000, 빈 입력 취소): ');
+          if(!url.trim())continue;
+          const opened=await openWebPreview(url.trim());
+          print(`브라우저 미리보기: ${opened}\n연결되지 않으면 해당 프로젝트의 개발 서버를 먼저 실행하세요.`);
+        }catch(error){print(`미리보기 실패: ${error.message}`);}
+        continue;
+      }
       if(input==='/cwd'){print(`작업 폴더: ${root}\n변경: /workspace <폴더 경로> · 파일 첨부: @상대경로`);continue;}
       if(input==='/workspace'||input.startsWith('/workspace ')||input.startsWith('/cd ')) {
         try {
