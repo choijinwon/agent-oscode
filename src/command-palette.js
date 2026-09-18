@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/ocr ', '이미지·PDF 텍스트 추출'],
   ['/settings', '모델 설정 변경'], ['/key', 'API 키 숨김 입력'],
   ['/context', '컨텍스트 파일과 토큰 확인'], ['/context history off', '이전 대화 제외'],
   ['/frontend', '프론트엔드 프로젝트 분석'], ['/files', '파일 목록 보기'],

@@ -34,7 +34,7 @@ test('plan mode investigates, stores a draft and exposes only read tools without
   await fs.writeFile(path.join(root, 'auth.js'), 'original');
   const tools = new WorkspaceTools(root, { approve: async () => true });
   const provider = { complete: async req => {
-    calls++; assert.deepEqual(req.tools.map(t => t.name), ['analysis_checkpoint', 'list_files', 'read_file', 'search']);
+    calls++; assert.deepEqual(req.tools.map(t => t.name), ['read_document', 'analysis_checkpoint', 'list_files', 'read_file', 'search']);
     assert.match(req.system, /Finish with a concise Markdown plan/);
     return calls === 1 ? response('', [{ id: 'r', name: 'read_file', input: { path: 'auth.js' } }]) : response();
   } };
@@ -117,7 +117,7 @@ test('CLI plans then explicitly applies the saved plan through the mock API', as
   const common = ['--cwd', root, '--provider', 'compatible', '--model', 'fixture', '--base-url', `http://127.0.0.1:${server.address().port}/v1`];
   const planned = await cli([...common, '--plan', '--prompt', 'Create answer.txt', '--yes', '--allow-shell']);
   assert.equal(planned.code, 0, planned.output); assert.equal(count, 1); await assert.rejects(fs.stat(path.join(root, 'answer.txt')));
-  assert.deepEqual(requests[0].tools.map(t => t.function.name), ['analysis_checkpoint', 'list_files', 'read_file', 'search']);
+  assert.deepEqual(requests[0].tools.map(t => t.function.name), ['read_document', 'analysis_checkpoint', 'list_files', 'read_file', 'search']);
   const applied = await cli([...common, '--resume', 'latest', '--apply-plan', '--yes']);
   assert.equal(applied.code, 0, applied.output); assert.equal(count, 3);
   assert.equal(await fs.readFile(path.join(root, 'answer.txt'), 'utf8'), 'ok');

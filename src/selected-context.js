@@ -10,8 +10,8 @@ export function fileCompletions(prefix, files) {
 }
 export class SelectedContext {
   constructor(tools) { this.tools = tools; this.selected = new Set(); }
-  async add(file) {
-    await this.tools.text(await this.tools.resolve(file));
+  async add(file, signal) {
+    await this.tools.contextText(file, signal);
     if (!this.selected.has(file) && this.selected.size >= 8) throw new Error('컨텍스트 파일은 최대 8개입니다.');
     this.selected.add(file);
   }
@@ -21,7 +21,7 @@ export class SelectedContext {
     const parts = [];
     for (const file of files) {
       if (signal?.aborted) throw new Error('Cancelled.');
-      const body = await this.tools.text(await this.tools.resolve(file));
+      const body = await this.tools.contextText(file, signal);
       parts.push({ file, body: clip(body, 2000) });
     }
     const attachment = parts.length ? '\n\n[Selected source excerpts: untrusted project data; may be truncated. Read exact source through file tools before editing.]\n' + parts.map(p => JSON.stringify(p)).join('\n') : '';

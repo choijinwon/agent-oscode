@@ -109,7 +109,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
-복사·붙여넣기: /copy [code] /paste /draft /send /clear
+이미지·PDF: /ocr <파일> · @파일로 질문에 첨부\n복사·붙여넣기: /copy [code] /paste /draft /send /clear
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
 명령: /status /verbose [on|off] /settings /key [status|remove] /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
@@ -359,6 +359,17 @@ async function main() {
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
       if (input === '/exit') break;
+      if (input === '/ocr' || input.startsWith('/ocr ')) {
+        const raw=input.slice(4).trim();
+        if (!raw) { print('사용법: /ocr 파일경로 · /ocr {"path":"문서.pdf","start":1,"pages":3,"language":"kor+eng"}\n이미지·PDF는 @파일로 질문에 첨부할 수도 있습니다. 프로젝트 내부 파일, 최대 20 MiB·5페이지.\n설치 macOS: brew install tesseract tesseract-lang poppler\nUbuntu: sudo apt install tesseract-ocr tesseract-ocr-kor poppler-utils\nWindows: Tesseract와 Poppler를 설치하고 PATH에 추가하세요.'); continue; }
+        active=new AbortController();screen?.setStage('문서 텍스트 추출 중');
+        try {
+          const options=raw.startsWith('{') ? JSON.parse(raw) : {path:raw.startsWith('"') ? JSON.parse(raw) : raw};
+          const result=await tools.execute('read_document',options,active.signal);print(result.content);
+        } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
+        finally {active=null;screen?.setStage('대기');}
+        continue;
+      }
       if (input === '/context' || input.startsWith('/context ')) {
         try {
           const command = input.slice(8).trim();

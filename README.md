@@ -47,6 +47,12 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 [분석 체크포인트 사용법과 한계](docs/analysis-checkpoints.md)
 
+## 이미지·PDF OCR
+
+`/ocr screenshots/login.png`로 이미지 글자를 추출하거나, `@docs/spec.pdf 요구사항을 정리해줘`처럼 문서를 질문에 첨부할 수 있습니다. PDF는 텍스트가 없는 페이지를 OCR로 처리합니다. 기본 한국어·영어, 첫 3페이지를 읽으며 범위를 지정할 수 있습니다.
+
+macOS 준비: `brew install tesseract tesseract-lang poppler`. OCR은 로컬에서 실행되고, 질문에 첨부한 추출 텍스트는 선택한 모델로 전달됩니다. [지원 형식·설치·페이지 설정](docs/ocr.md)
+
 ## 복사·붙여넣기
 
 대화 중 `/paste`로 클립보드의 여러 줄 코드·로그를 초안에 담고, `/draft`로 확인한 뒤 `/send`로 한 번에 전송합니다. `/clear`로 취소할 수 있습니다. `/copy`는 마지막 완료 답변을, `/copy code`는 코드 블록만 복사합니다.
