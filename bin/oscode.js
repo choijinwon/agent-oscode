@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { changePreview } from '../src/change-preview.js';
 import {AgentTabs} from '../src/agent-tabs.js';
 import {localUrl} from '../src/dev-server.js';
 import {AutoWebPreview,openWebPreview} from '../src/web-preview.js';
@@ -306,6 +307,16 @@ async function main(raw = process.argv.slice(2), host) {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  const originalPerform=tools.perform.bind(tools);
+  tools.perform=async(name,input,signal)=>{
+    const result=await originalPerform(name,input,signal);
+    if(['write_file','edit_file'].includes(name)){
+      const before=name==='write_file'?'':input.old_text,after=name==='write_file'?input.content:input.new_text;
+      const count=text=>text?text.split('\n').length-(text.endsWith('\n')?1:0):0;
+      screen?.recordChange(input.path,changePreview(input.path,before,after),count(after),count(before));
+    }
+    return result;
+  };
   if(host) {
     const perform=tools.perform.bind(tools);
     tools.perform=(name,input,signal)=>['edit_file','write_file','shell','ui_check','verify_project'].includes(name)
@@ -342,10 +353,11 @@ async function main(raw = process.argv.slice(2), host) {
   };
   const execute = async (prompt, executionPlan = null, includeMentions = !executionPlan) => {
     active = new AbortController();
+    screen?.clearFailure();
     const originalPrompt = prompt;
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
     try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
-    catch (e) { const restoredQueue=screen?.pauseQueuedPrompt(); if (active.signal.aborted && !restoredQueue) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
+    catch (e) { screen?.showFailure(originalPrompt,pastedPrompt); const restoredQueue=screen?.pauseQueuedPrompt(); if (active.signal.aborted && !restoredQueue) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
   const apply = async (confirmed = false) => {

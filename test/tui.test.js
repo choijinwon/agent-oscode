@@ -304,3 +304,22 @@ test('minimal toolbar expands tools without losing draft or moving composer',asy
  assert.equal(ui.buttons.find(b=>b.action==='send').y,row);assert.equal(ui.buffer,'작성 중인 요청');
  ui.buttonAction('more');assert(ui.buttons.some(b=>b.action==='settings'));ui.buttonAction('send');assert.equal(await answer,'작성 중인 요청');
 });
+
+test('queue card deletes only queued work and keeps composer anchored',t=>{
+ const {ui,input}=fixture(t);const row=ui.renderedRows.findIndex(row=>row.includes('╭'));
+ input.write('대기 요청\r');assert(ui.cardButtons.some(b=>b.action==='dropqueue'));
+ assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),row);
+ input.write('다른 초안');ui.buttonAction('dropqueue');assert.equal(ui.queuedPrompt,null);assert.equal(ui.buffer,'다른 초안');
+});
+test('failure actions preserve draft and pasted retry semantics',async t=>{
+ const {ui,input}=fixture(t);ui.showFailure('/문서 내용',true);const answer=ui.question(chatPrompt);input.write('다른 초안');
+ assert(ui.cardButtons.some(b=>b.action==='retry'));ui.buttonAction('retry');
+ assert.equal(await answer,'/문서 내용');assert(ui.lastInputWasPaste);assert.equal(ui.buffer,'다른 초안');assert.equal(ui.failure,null);
+ ui.buffer='';ui.cursor=0;ui.showFailure('실패한 요청');const next=ui.question(chatPrompt);ui.buttonAction('editfailed');assert.equal(ui.buffer,'실패한 요청');input.write('\r');await next;
+});
+test('changed file picker shows recorded changes and preserves input',async t=>{
+ const {ui,input}=fixture(t);ui.recordChange('src/button.js','-old\n+new',1,1);ui.recordChange('src/button.js','+second',1,0);
+ const answer=ui.question(chatPrompt);input.write('작성 중');ui.buttonAction('changes');assert.equal(ui.overlay.kind,'changes');
+ assert(ui.menu()[0].includes('+2'));input.write('\r');assert.equal(ui.buffer,'작성 중');assert(ui.lines().some(line=>line.includes('second')));
+ assert.equal(ui.overlay,null);input.write('\r');await answer;
+});

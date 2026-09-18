@@ -40,7 +40,7 @@ export function cursorPositions(text, width) {
 export class ConsoleUI extends EventEmitter {
   constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy, paste, tabs } = {}) {
     super(); this.input = input; this.output = output; this.status = status; this.copy = copy; this.paste = paste; this.tabs = tabs;
-    this.history = []; this.overlay = null; this.recovery = null;
+    this.changes = new Map(); this.failure = null; this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.olderEntries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
     this.expanded = false; this.menuIndex = -1; this.closed = false;
@@ -133,12 +133,14 @@ export class ConsoleUI extends EventEmitter {
     if (!this.overlay) return;
     const saved = this.overlay;
     this.overlay = null;
+    if(saved.kind==='changes'&&selected){Object.assign(this,{buffer:saved.buffer,cursor:saved.cursor,hasPaste:saved.hasPaste});this.append(`\n파일 도구 변경 · ${selected.path} (누적 교체 범위)\n${selected.preview}\n`);this.scroll=0;this.render();return;}
     this.buffer = selected ? selected.text : saved.buffer;
     this.cursor = selected ? chars(selected.text).length : saved.cursor;
     this.hasPaste = selected ? selected.pasted : saved.hasPaste;
     this.menuIndex = -1; this.hint = ''; this.render();
   }
   choices() {
+    if(this.overlay?.kind==='changes')return [...this.changes.values()].filter(item=>item.path.toLowerCase().includes(this.buffer.toLowerCase())).map(item=>({...item,label:`${item.path}  +${item.added} −${item.removed}`}));
     if(this.overlay?.kind==='files') return this.files.filter(file=>file.toLowerCase().includes(this.buffer.toLowerCase())).slice(0,100).map(file=>({text:`${this.overlay.buffer}${this.overlay.buffer && !/\s$/.test(this.overlay.buffer)?' ':''}@${/\s/.test(file)?JSON.stringify(file):file} `,label:file,pasted:this.overlay.hasPaste}));
     if (this.overlay?.kind === 'palette') return searchCommands(this.buffer).map(([text, label]) => ({text, label: `${label}  ${text}`, pasted: false}));
     if (this.overlay?.kind === 'history') return [...this.history].reverse().filter(item => item.text.toLowerCase().includes(this.buffer.toLowerCase())).map(item => ({...item, label: item.text.replace(/\n/g, ' ↵ ')}));
@@ -188,6 +190,13 @@ export class ConsoleUI extends EventEmitter {
     }catch(error){this.hint=`붙여넣기 실패: ${safe(error.message)}`;}
     finally{this.pasteLoading=false;this.render();}
   }
+  recordChange(path, preview, added, removed) {
+    path=safe(path);preview=safe(preview);
+    const previous=this.changes.get(path);
+    this.changes.set(path,{path,preview:(previous?.preview||'')+'\n'+preview,added:(previous?.added||0)+added,removed:(previous?.removed||0)+removed});this.render();
+  }
+  showFailure(text, pasted=false) { this.failure={text,pasted};this.render(); }
+  clearFailure() { this.failure=null;this.render(); }
   queuePrompt() {
     if(this.pending || !this.buffer.trim())return;
     if(this.queuedPrompt){this.hint='다음 요청 1개가 대기 중입니다. Esc로 꺼내 수정하세요.';this.render();return;}
@@ -271,6 +280,14 @@ export class ConsoleUI extends EventEmitter {
     if(action==='newAgent'&&!this.closed){this.emit('newAgent');return;}
     if(action.startsWith('agent:')&&!this.closed){this.emit('selectAgent',Number(action.slice(6)));return;}
     if(this.closed || this.overlay || this.settingsView || this.pending && !this.pending.normal)return;
+    if(action==='dropqueue'){this.queuedPrompt=null;this.render();return;}
+    if(action==='changes'){this.openOverlay('changes');return;}
+    if(['retry','editfailed'].includes(action)&&this.failure&&this.pending?.normal){
+      const failed=this.failure;
+      if(action==='editfailed'){this.recoverPrompt(failed.text,failed.pasted);if(!this.buffer)this.restorePrompt();return;}
+      this.failure=null;const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
+      this.hasPaste=failed.pasted;this.finish(failed.text);Object.assign(this,draft);this.render();return;
+    }
     if(action==='more'){this.moreActions=!this.moreActions;this.render();return;}
     if(action==='copy')return this.copyContent('answer');
     if(action==='paste')return this.pasteContent();
@@ -291,7 +308,7 @@ export class ConsoleUI extends EventEmitter {
     const [,button,x,y]=match;
     if((Number(button)&64)!==0){this.scroll=Math.max(0,this.scroll+((Number(button)&1)?-3:3));this.render();return;}
     if(Number(button)!==0)return;
-    const hit=[...(this.tabButtons||[]),...(this.buttons||[])].find(b=>Number(y)===b.y && Number(x)>=b.x && Number(x)<b.x+b.width);
+    const hit=[...(this.tabButtons||[]),...(this.buttons||[]),...(this.cardButtons||[])].find(b=>Number(y)===b.y && Number(x)>=b.x && Number(x)<b.x+b.width);
     if(hit)this.buttonAction(hit.action);
   }
   key(text = '', key) {
@@ -396,7 +413,9 @@ export class ConsoleUI extends EventEmitter {
     const position=cursorPositions(prefix,box-4).at(-1);const cursorRow=position.row;
     while(draftLines.length<=cursorRow)draftLines.push('');
     const toolbar=!this.overlay && !this.settingsView && (!pending || pending.normal) && h>=12 && box>=28;
-    const toolbarHeight=toolbar?1:0;
+    const cards=!this.overlay&&!this.settingsView&&(!pending||pending.normal)&&h>=16&&box>=40;
+    const cardHeight=cards?((this.queuedPrompt?2:0)+(this.failure?2:0)+(this.changes.size?1:0)):0;
+    const toolbarHeight=(toolbar?1:0)+cardHeight;
     const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9-toolbarHeight));
     this.inputOffset=Math.max(0,Math.min(this.inputOffset,Math.max(0,draftLines.length-inputHeight)));
     if(cursorRow<this.inputOffset)this.inputOffset=cursorRow;
@@ -463,8 +482,25 @@ export class ConsoleUI extends EventEmitter {
       const value=line(`${selected?' ›':'  '} ${option}${description?'  '+description:''}`);
       rows.push(selected?surface(value):muted(value));
     }
+    this.cardButtons=[];
+    const cardActions=items=>{
+      let used=1;const parts=[];
+      for(const [action,label,enabled] of items){const width=displayWidth(label);if(used+width>box)break;
+        if(enabled)this.cardButtons.push({action,x:left+used+1,y:rows.length+1,width});
+        parts.push(enabled?surface(label):muted(label));parts.push(' ');used+=width+1;
+      }rows.push(' '+parts.join(''));
+    };
+    if(cards&&this.queuedPrompt){
+      rows.push(muted(line(` 다음 요청 · ${safe(this.queuedPrompt.text).replace(/\n/g,' ↵ ')}`)));
+      cardActions([['unqueue','[수정]',true],['dropqueue','[삭제]',true]]);
+    }
+    if(cards&&this.failure){
+      rows.push(muted(line(' 요청이 중단되었습니다 · 다시 실행 전 변경 내용을 확인하세요')));
+      cardActions([['retry','[재시도]',Boolean(pending)],['editfailed','[요청 수정]',Boolean(pending)],['settings','[모델 변경]',Boolean(pending)]]);
+    }
+    if(cards&&this.changes.size)cardActions([['changes',`[파일 도구 변경 ${this.changes.size}개 · 보기]`,Boolean(pending)]]);
     const inputTop=rows.length;
-    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : (this.multiline ? '여러 줄 작성' : '');
+    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : this.overlay.kind === 'changes' ? '변경 파일 검색 · Enter 상세' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : (this.multiline ? '여러 줄 작성' : '');
     const label = title ? fit(` ${title} `,box-2) : '';
     rows.push(border(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
     for(let i=0;i<inputHeight;i++) {
