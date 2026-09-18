@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {AgentTabs} from '../src/agent-tabs.js';
 import {localUrl} from '../src/dev-server.js';
 import {AutoWebPreview,openWebPreview} from '../src/web-preview.js';
 import {workspacePath} from '../src/workspace-path.js';
@@ -116,7 +117,10 @@ API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
 명령: /status /verbose [on|off] /settings /key [status|remove] /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
-async function main(raw = process.argv.slice(2)) {
+async function main(raw = process.argv.slice(2), host) {
+  let screen=null;
+  const output=text=>screen?screen.append(clean(text)):process.stdout.write(text);
+  const print=text=>output(clean(text)+'\n');
   const authAction = raw[0] === 'auth' ? (raw[1] || 'status') : null;
   const cliArgs = authAction ? raw.slice(2) : raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
@@ -256,7 +260,7 @@ async function main(raw = process.argv.slice(2)) {
   }
   const undo = async id => {
     if (config.plan || config.permissions.write === 'deny') throw new Error('현재 모드/권한에서 되돌리기를 허용하지 않습니다.');
-    const result = await checkpoints.undo(id);
+    const result = await (host?host.exclusive(root,()=>checkpoints.undo(id)):checkpoints.undo(id));
     print(result);
   };
   if (args['copy-last']) { await accessClipboard('write', lastAnswer(session)); print('마지막 완료 답변을 클립보드에 복사했습니다.'); return; }
@@ -279,15 +283,17 @@ async function main(raw = process.argv.slice(2)) {
   const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
-    screen = new ConsoleUI({ paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
-      usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) });
+    const uiOptions={ paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
+      usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) };
+    const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.plan?['--plan']:[])];
+    screen=host?host.createUI(uiOptions,childArgs):new ConsoleUI(uiOptions);
     if(readSaved)screen.restoreSession(session);
 
   }
   const rl = screen || (interactive ? createChatConsole() : null);
   let active;
   const interrupt = () => { if (active) active.abort(); else rl?.close(); };
-  process.on('SIGINT', interrupt);
+  if(!host)process.on('SIGINT', interrupt);
   rl?.on('SIGINT', interrupt);
   const tools = new WorkspaceTools(root, { readOnly: config.plan, outputLimit: config.outputLimit, checkpoints, permissions: config.permissions, verifyOptions: config.verify,
     onPreview: text => screen ? screen.preview(text) : print(text),
@@ -300,6 +306,11 @@ async function main(raw = process.argv.slice(2)) {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  if(host) {
+    const perform=tools.perform.bind(tools);
+    tools.perform=(name,input,signal)=>['edit_file','write_file','shell','ui_check','verify_project'].includes(name)
+      ? host.exclusive(root,()=>perform(name,input,signal),signal) : perform(name,input,signal);
+  }
   screen?.on('toggleMode', () => {
     if (active || !screen?.pending?.normal) return;
     try {
@@ -313,6 +324,7 @@ async function main(raw = process.argv.slice(2)) {
   let verbose = Boolean(args.verbose);
   let answerStarted = false;
   const autoPreview=new AutoWebPreview({onOpen:url=>print(`자동 미리보기: ${url}`)});
+  if(host)autoPreview.opened=host.previewOpened;
   const showPreview=url=>{if(interactive&&!config.plan)void autoPreview.show(url);};
   const emit = (kind, data) => {
     if ((kind === 'delta' || kind === 'text') && !answerStarted) { if(!screen)output(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
@@ -560,5 +572,12 @@ async function main(raw = process.argv.slice(2)) {
     }
   } finally { autoPreview.close(); rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
 }
-async function run(){let next=process.argv.slice(2);while(next)next=await main(next);}
+async function run(){
+ const args=process.argv.slice(2);
+ const loop=async(raw,host)=>{let next=raw;while(next)next=await main(next,host);};
+ if(process.stdin.isTTY&&process.stdout.isTTY&&!args.some(value=>['--simple','--prompt','--demo','--apply-plan'].includes(value)||value.startsWith('--prompt='))) {
+  const manager=new AgentTabs({run:loop});await manager.launch(args);
+  if(manager.lastError)throw new Error(manager.lastError);
+ }else await loop(args);
+}
 run().catch(error => { print(`oscode: ${error.message}`); process.exitCode = 1; });
