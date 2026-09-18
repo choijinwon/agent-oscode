@@ -227,3 +227,17 @@ test('resumed sessions display archived and current conversation without sending
  ui.restoreSession({archive:[{messages:[{role:'user',content:'이전 질문'},{role:'assistant',content:'이전 답변'}]}],turns:[{messages:[{role:'user',content:'새 질문\n\n[Selected source excerpts: hidden source'},{role:'assistant',content:'새 답변'}]}]});
  assert(ui.lines().join('\n').includes('이전 답변'));assert(ui.lines().join('\n').includes('새 답변'));assert(!ui.lines().join('\n').includes('hidden source'));assert.equal(ui.buffer,'');
 });
+
+test('clipboard paste inserts multiline at cursor without submitting or activating slash commands',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('앞뒤');ui.key('',{name:'left'});
+ ui.paste=async()=>'/exit\r\n둘째 줄';await ui.key('',{ctrl:true,name:'v'});
+ assert.equal(ui.buffer,'앞/exit\n둘째 줄뒤');assert(ui.pending);assert(ui.hasPaste);assert(!ui.completionOpen);
+ input.write('\r');assert.equal(await answer,'앞/exit\n둘째 줄뒤');assert(ui.lastInputWasPaste);
+});
+test('clipboard errors preserve draft and delayed reads cannot leak into settings',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('초안');
+ ui.paste=async()=>{throw new Error('unavailable');};await ui.pasteContent();assert.equal(ui.buffer,'초안');assert.match(ui.hint,/실패/);
+ ui.paste=async()=>'x'.repeat(65537);await ui.pasteContent();assert.equal(ui.buffer,'초안');
+ let resolve;ui.paste=()=>new Promise(r=>resolve=r);const pasting=ui.pasteContent();input.write('\r');await answer;
+ const secret=ui.questionHidden('Key');resolve('private clipboard');await pasting;assert.equal(ui.buffer,'');input.write('\r');await secret;
+});

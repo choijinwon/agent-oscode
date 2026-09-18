@@ -38,8 +38,8 @@ export function cursorPositions(text, width) {
 }
 
 export class ConsoleUI extends EventEmitter {
-  constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy } = {}) {
-    super(); this.input = input; this.output = output; this.status = status; this.copy = copy;
+  constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy, paste } = {}) {
+    super(); this.input = input; this.output = output; this.status = status; this.copy = copy; this.paste = paste;
     this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.olderEntries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
@@ -169,6 +169,25 @@ export class ConsoleUI extends EventEmitter {
     } catch (error) { this.hint = `복사 실패: ${safe(error.message)}`; }
     finally { this.copying = false; this.render(); }
   }
+  async pasteContent() {
+    if(this.closed || this.pasteLoading || this.overlay || this.settingsView || this.pending && !this.pending.normal)return;
+    const pending=this.pending,buffer=this.buffer,cursor=this.cursor;
+    this.pasteLoading=true;
+    try {
+      if(!this.paste)throw new Error('클립보드를 사용할 수 없습니다. 터미널 붙여넣기를 사용하세요.');
+      const value=await this.paste();
+      if(this.closed)return;
+      if(this.pending!==pending || this.buffer!==buffer || this.cursor!==cursor || this.overlay || this.settingsView) {
+        this.hint='입력 상태가 바뀌었습니다. 다시 붙여넣어 주세요.';return;
+      }
+      const text=safe(String(value).replace(/\r\n?/g,'\n'));
+      if(!text)throw new Error('클립보드에 텍스트가 없습니다.');
+      if(Buffer.byteLength(this.buffer)+Buffer.byteLength(text)>65536)throw new Error('입력은 64 KiB 이내로 나눠주세요.');
+      this.insert(text);this.hasPaste=true;this.completionOpen=false;this.menuIndex=-1;
+      this.hint='붙여넣었습니다. 내용을 확인한 뒤 전송하세요.';
+    }catch(error){this.hint=`붙여넣기 실패: ${safe(error.message)}`;}
+    finally{this.pasteLoading=false;this.render();}
+  }
   shortcuts() {
     if (this.completionOpen && this.buffer.startsWith('/')) return ' ↑↓ 명령 선택 · Enter 실행 · Esc 닫기';
     if (this.pending?.choices) return ' 이름 검색 · ↑↓ 선택 · Enter 확정 · Ctrl+C 취소';
@@ -231,6 +250,8 @@ export class ConsoleUI extends EventEmitter {
   }
   buttonAction(action) {
     if(this.closed || this.overlay || this.settingsView || this.pending && !this.pending.normal)return;
+    if(action==='copy')return this.copyContent('answer');
+    if(action==='paste')return this.pasteContent();
     if(action==='stop'){if(!this.pending)this.emit('SIGINT');return;}
     if(!this.pending?.normal)return;
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
@@ -261,6 +282,7 @@ export class ConsoleUI extends EventEmitter {
       else if(this.mouseBuffer.length>32||!/^[0-9;]*$/.test(this.mouseBuffer))this.mouseBuffer=undefined;
       return;
     }
+    if(key.ctrl && key.name==='v')return this.pasteContent();
     if(key.name==='f9'){this.buttonAction('attach');return;}
     if(key.name==='f10'){this.buttonAction('settings');return;}
     if (['f6','f7','f8'].includes(key.name)) { return this.copyContent({f6:'answer',f7:'code',f8:'draft'}[key.name]); }
@@ -398,7 +420,7 @@ export class ConsoleUI extends EventEmitter {
     })];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
-    rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
+    rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · Ctrl+V 붙여넣기' : ''}`)));
     for(const option of options.slice(0,menuHeight)) {
       const selected=option===menu[this.menuIndex];
       const description=!this.overlay&&!pending?.choices ? commandPalette.find(([command])=>command===option)?.[1] : '';
@@ -418,14 +440,17 @@ export class ConsoleUI extends EventEmitter {
     this.buttons=[];
     if(toolbar) {
       const compact=box<65;
-      const items=[{action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
+      const items=[{action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
+        {action:'copy',label:'[복사]',enabled:!this.copying},
+        {action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
         {action:'mode',label:`[${s.mode||'BUILD'}]`,enabled:Boolean(pending)},
         {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},
         {action:pending?'send':'stop',label:pending?'[↑ 전송]':'[■ 중단]',enabled:!pending||Boolean(this.buffer.trim())}];
       let used=0;const segments=[];
-      for(const item of (box<40?items.filter(item=>['attach','send','stop'].includes(item.action)):items)) {
+      for(const item of (box<40?items.filter(item=>['paste','send','stop'].includes(item.action)):items)) {
         const width=displayWidth(item.label);
-        if(used+width>box-4)continue;
+        const reserve=item===items.at(-1)?0:displayWidth(items.at(-1).label)+1;
+        if(used+width+reserve>box-4)continue;
         const gap=item===items.at(-1)?Math.max(0,box-4-used-width):0;
         segments.push(' '.repeat(gap));used+=gap;
         if(item.enabled)this.buttons.push({action:item.action,x:left+4+used,y:top+rows.length+1,width});
