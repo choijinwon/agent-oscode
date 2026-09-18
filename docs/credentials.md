@@ -36,7 +36,5 @@ manager. Avoid putting the literal key in shell command arguments or history.
 Without this explicit flag, noninteractive key entry is rejected.
 
 Models can still be configured through `oscode.json` (`model`, `provider`,
-`baseUrl`) or CLI flags. API keys must not go in `oscode.json`. In an already-open
-CLI, run `auth set` in another terminal, then use `/model MODEL`; the next model
-request reloads the key. `/connect` shows setup guidance. Local compatible servers
+`baseUrl`) or CLI flags. API keys must not go in `oscode.json`. In an already-open CLI, use `/settings` to select the provider, endpoint and model, then `/key` to enter a hidden key without leaving the conversation. `/key status` and `/key remove` manage the current endpoint key. The next request reloads it. Provider/model selections apply to the current chat; project configuration remains unchanged. `/connect` shows setup guidance. Local compatible servers
 can continue to work without keys.

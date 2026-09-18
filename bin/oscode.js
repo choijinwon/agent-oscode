@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { createChatConsole } from '../src/chat-console.js';
+import { setCredential, getCredential, defaultBase } from '../src/credentials.js';
+import { endpoint } from '../src/providers.js';
 import { configureAuth } from '../src/auth-cli.js';
 import { accessClipboard, lastAnswer, PasteDraft } from '../src/clipboard.js';
 import { estimateTokens } from '../src/context.js';
@@ -91,7 +94,7 @@ API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
 복사·붙여넣기: /copy [code] /paste /draft /send /clear
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
-명령: /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
+명령: /settings /key [status|remove] /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
   const raw = process.argv.slice(2);
@@ -242,13 +245,13 @@ async function main() {
   const connectHelp = () => {
     print('로컬 모드: API 키 없이 /files, /frontend, /help, /paste 등을 사용할 수 있습니다.');
     print('AI 자연어 분석·수정은 모델 연결이 필요합니다. 클립보드나 대화에 API 키를 입력하지 마세요.');
-    print('키 설정: 별도 터미널에서 oscode auth set을 실행하세요. 저장 후 이 입력창에서 /model MODEL로 지정하면 됩니다.');
+    print('이 채팅창에서 /settings로 공급자·모델을 선택하고 /key로 키를 숨김 입력하세요.');
     print('로컬 모델: --provider compatible --base-url http://localhost:PORT/v1 --model MODEL (호환 서버가 실행 중이어야 합니다).');
     print(connectionStatus() || '모델 설정이 준비되었습니다. 실제 연결은 요청 시 확인합니다.');
   };
   const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
+  const rl = interactive ? createChatConsole() : null;
   let active;
   const interrupt = () => { if (active) active.abort(); else rl?.close(); };
   process.on('SIGINT', interrupt);
@@ -263,13 +266,16 @@ async function main() {
       catch { return false; }
     }
   });
+  let answerStarted = false;
   const emit = (kind, data) => {
+    if ((kind === 'delta' || kind === 'text') && !answerStarted) { process.stdout.write('\noscode › '); answerStarted = true; }
+    if (kind === 'request') answerStarted = false;
     if (kind === 'delta') process.stdout.write(clean(data));
     if (kind === 'stream_end') print('');
     if (kind === 'text' || kind === 'notice') print(data);
     if (kind === 'request') print(`  ↗ ${config.model} · 입력 추정 ${data.estimate} · 출력 한도 ${data.maxOutput} · ${data.step}/${config.maxSteps}`);
     if (kind === 'tool') print(`  → ${data.name}${data.input?.path ? ` ${data.input.path}` : ''}`);
-    if (kind === 'result') print(data.content);
+    if (kind === 'result') { if (interactive) print(`  ${data.is_error ? '실패' : '완료'} · ${data.name}`); else print(data.content); }
   };
   const execute = async (prompt, executionPlan = null) => {
     active = new AbortController();
@@ -290,19 +296,50 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.9.1 · ${connectionStatus() ? 'LOCAL' : config.provider}/${config.model || '미설정'} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`OSCODE CHAT 0.9.1 · ${connectionStatus() ? 'LOCAL' : config.provider}/${config.model || '미설정'} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
     if (args.prompt) { await execute(args.prompt); return; }
     if (!rl) throw new Error('비대화형 실행은 --prompt를 지정하세요.');
     if (connectionStatus()) connectHelp();
-    print('자연어 요청 입력 · /help 명령 목록 · /connect 연결 안내 · Ctrl+C 실행 취소');
+    print('자연어로 대화하세요 · /settings 모델 설정 · /key 키 입력 · /help 도움말 · Ctrl+C 실행 취소');
     while (!rl.closed) {
       let input;
-      try { input = (await rl.question(`\noscode [${config.agent}/${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
+      try { input = (await rl.question(`\n나 [${connectionStatus() ? 'LOCAL' : config.model} · ${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;
+      if (input === '/settings') {
+        active = new AbortController();
+        try {
+          print('모델 설정 · Enter는 현재 값 유지 · Ctrl+C 취소');
+          const provider = (await rl.question(`공급자 [${config.provider}]: `, { signal: active.signal })).trim() || config.provider;
+          if (!['anthropic', 'compatible'].includes(provider)) throw new Error('anthropic 또는 compatible을 입력하세요.');
+          const previousBase = provider === config.provider ? config.baseUrl : undefined;
+          const base = (await rl.question(`API 주소 [${previousBase || defaultBase(provider)}]: `, { signal: active.signal })).trim() || previousBase || defaultBase(provider);
+          endpoint(base, provider === 'anthropic' ? 'messages' : 'chat/completions');
+          const model = (await rl.question(`모델 ID [${config.model || '미설정'}]: `, { signal: active.signal })).trim() || config.model;
+          if (!model) throw new Error('모델 ID를 입력하세요.');
+          config.provider = provider; config.baseUrl = base; config.model = model;
+          print('현재 채팅의 모델 설정을 변경했습니다. /key로 키를 저장하거나 자연어 요청을 입력하세요.');
+        } catch (error) { print(active.signal.aborted ? '설정을 취소했습니다.' : error.message); }
+        finally { active = null; }
+        continue;
+      }
+      if (input === '/key' || input === '/key status' || input === '/key remove') {
+        active = new AbortController();
+        try {
+          if (input === '/key status') print(getCredential(config.provider, config.baseUrl) ? '키 저장됨 (값은 숨김)' : '저장된 키 없음');
+          else if (input === '/key remove') { setCredential(config.provider, config.baseUrl, null); print('현재 공급자·주소의 저장된 키를 삭제했습니다.'); }
+          else {
+            const key = (await rl.questionHidden('API 키 (숨김 입력, Ctrl+C 취소): ', { signal: active.signal })).trim();
+            setCredential(config.provider, config.baseUrl, key);
+            print('키를 별도 사용자 설정에 저장했습니다. 이제 이 채팅에서 바로 사용할 수 있습니다.');
+          }
+        } catch (error) { print(active.signal.aborted ? '키 입력을 취소했습니다.' : error.message); }
+        finally { active = null; }
+        continue;
+      }
       if (input === '/connect') { connectHelp(); continue; }
       if (input === '/files') { const result = await tools.execute('list_files', { path: '.' }); print(result.content); continue; }
       if (input === '/copy' || input === '/copy code') {
