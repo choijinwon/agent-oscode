@@ -1,10 +1,10 @@
 import { endpoint } from './providers.js';
 import { defaultBase, getCredential } from './credentials.js';
 
-export async function listModels({provider, baseUrl, signal}, fetchImpl=fetch) {
+export async function listModels({provider, baseUrl, signal, key: suppliedKey}, fetchImpl=fetch) {
   const base=baseUrl || defaultBase(provider);
   const url=endpoint(base,'models');
-  const key=(provider==='anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY) || getCredential(provider,base);
+  const key=suppliedKey || (provider==='anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY) || getCredential(provider,base);
   const headers=provider==='anthropic' ? {'anthropic-version':'2023-06-01',...(key ? {'x-api-key':key} : {})} : key ? {authorization:`Bearer ${key}`} : {};
   const response=await fetchImpl(url,{headers,redirect:'error',signal:AbortSignal.any([...(signal ? [signal] : []),AbortSignal.timeout(10000)])});
   if(!response.ok) { await response.body?.cancel();throw new Error(`모델 목록 HTTP ${response.status}. 직접 입력하거나 키·주소를 확인하세요.`); }

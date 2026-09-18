@@ -160,7 +160,7 @@ export class ConsoleUI extends EventEmitter {
       while (this.history.length > 100 || this.history.reduce((n, item) => n + item.text.length, 0) > 200000) this.history.shift();
     }
     this.pending = null; this.lastInputWasPaste = pending.normal && Boolean(this.hasPaste); this.hasPaste = false; pending.signal?.removeEventListener('abort', pending.abort);
-    if (!error && !pending.hidden && value?.trim()) this.append(`\n나 › ${value}\n`);
+    if (!error && !pending.hidden && !this.settingsView && value?.trim()) this.append(`\n나 › ${value}\n`);
     this.buffer = ''; this.cursor = 0; this.menuIndex = -1; this.completionOpen = false;
     if (!pending.normal && this.savedDraft) { Object.assign(this, this.savedDraft); this.savedDraft = null; }
     if (error) pending.reject(error); else pending.resolve(value);
@@ -231,7 +231,7 @@ export class ConsoleUI extends EventEmitter {
   render() {
     if(this.closed)return;
     const w=this.width,screenHeight=this.height,s=this.status(), box=this.composerWidth;
-    const home=this.entries.length===0;
+    const home=this.entries.length===0 && !this.settingsView;
     const h=home ? Math.min(screenHeight,20) : screenHeight;
     const left=Math.floor((w-box)/2);
     const top=home ? Math.floor((screenHeight-h)/2) : 0;
@@ -250,14 +250,19 @@ export class ConsoleUI extends EventEmitter {
     if(cursorRow<this.inputOffset)this.inputOffset=cursorRow;
     if(cursorRow>=this.inputOffset+inputHeight)this.inputOffset=cursorRow-inputHeight+1;
     const first=this.inputOffset;
-    const menu=this.overlay || this.pending?.choices || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
+    const menu=this.overlay || this.pending?.choices || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const count=this.settingsView ? 6 : 3;
+    const offset=Math.max(0,chosen-count+1);const options=menu.slice(offset,offset+count);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);
     const all=this.lines();this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
     let body=all.slice(start,end);
-    if(home) {
+    if(this.settingsView) {
+      const view=this.settingsView;
+      body=['설정', '현재 채팅에 적용 · API 키는 별도 저장', '', `공급자  ${view.provider}`, `모델    ${view.model || '선택 필요'}`, `주소    ${view.baseUrl}`, `API 키  ${view.keyStatus}`, '', view.notice].map(s=>fit(s,box-2)).slice(0,bodyHeight);
+      while(body.length<bodyHeight)body.push('');
+    } else if(home) {
       const welcome = [
         '',
         '프론트엔드 작업을 시작하세요',

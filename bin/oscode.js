@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { settingsUI } from '../src/settings-ui.js';
 import { listModels, chooseModel } from '../src/model-list.js';
 import { SelectedContext } from '../src/selected-context.js';
 import { RepairFlow } from '../src/repair.js';
@@ -395,9 +396,10 @@ async function main() {
         print(`  상세 출력 ${verbose ? '켜짐' : '꺼짐'}`); continue;
       }
       if (input === '/settings') {
-        if (screen) { screen.panel = '모델 설정'; screen.append(`\n공급자: ${config.provider}\n주소: ${config.baseUrl || defaultBase(config.provider)}\n모델: ${config.model || '미설정'}\n키: ${getCredential(config.provider, config.baseUrl) ? '저장됨' : '없음'}\n`); }
+        if (screen) screen.panel = '설정';
         active = new AbortController();
         try {
+          if (screen) { const applied=await settingsUI(screen,config,active.signal);print(applied ? '설정을 적용했습니다.' : '설정 변경을 취소했습니다.');continue; }
           print('모델 설정 · Enter는 현재 값 유지 · Ctrl+C 취소');
           const provider = (await rl.question(`공급자 [${config.provider}]: `, { signal: active.signal })).trim() || config.provider;
           if (!['anthropic', 'compatible'].includes(provider)) throw new Error('anthropic 또는 compatible을 입력하세요.');

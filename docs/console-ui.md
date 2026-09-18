@@ -185,3 +185,19 @@ draft. The header updates immediately. Project-locked PLAN cannot switch to BUIL
 Switching never applies a saved plan; use `/apply` for that. Tab is unavailable for
 mode switching during work, settings or approvals. Slash/file completion takes
 priority when candidates exist; command/history/model pickers retain navigation.
+
+## Settings panel
+
+The full-screen `/settings` command opens a dedicated summary and menu rather
+than a mandatory sequence of text prompts. Use arrows and Enter to choose a
+provider preset, search models, edit the API URL, or enter a masked API key.
+Provider presets include Anthropic, OpenRouter, OpenAI-compatible OpenAI API,
+localhost:1234, and a custom compatible endpoint. Presets do not start a server.
+Changing provider/address clears the draft model and pending key.
+
+All edits remain in a temporary draft until `적용하고 닫기` is selected.
+Cancel or Ctrl+C discards the draft. A newly entered key may be used to retrieve
+that endpoint's model catalog before apply, but is not written to disk until
+apply. Summary and selection responses do not clutter the conversation or input
+history. Applied model/endpoint choices last for this chat; the key uses the
+existing credential store. The line-oriented `--simple` flow is unchanged.
