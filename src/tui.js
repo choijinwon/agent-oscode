@@ -1,3 +1,4 @@
+import { searchCommands } from './command-palette.js';
 import { fileCompletions } from './selected-context.js';
 import { EventEmitter } from 'node:events';
 import { emitKeypressEvents } from 'node:readline';
@@ -38,6 +39,7 @@ export function cursorPositions(text, width) {
 export class ConsoleUI extends EventEmitter {
   constructor({ input = process.stdin, output = process.stdout, status = () => ({}) } = {}) {
     super(); this.input = input; this.output = output; this.status = status;
+    this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.expanded = false; this.menuIndex = -1; this.closed = false;
     this.stage = '대기'; this.panel = '대화'; this.pasting = false;
@@ -76,7 +78,48 @@ export class ConsoleUI extends EventEmitter {
   log(title, text) { this.mutate(() => { this.entries.push({ type: 'log', title: safe(title), text: `${safe(title)}\n${safe(text)}\n` }); this.bound(); }); }
   preview(text) { this.panel = text.startsWith('$') ? '실행 검토' : '변경 검토'; this.append(`\n── ${this.panel} (y 적용 / n 취소) ──\n${text}\n`); this.scroll = 0; this.render(); }
   setStage(stage) { this.stage = stage; this.render(); }
+  openOverlay(kind) {
+    if (!this.pending?.normal || this.pending.hidden) return;
+    if (this.overlay) this.closeOverlay();
+    this.hint = '';
+    this.overlay = { kind, buffer: this.buffer, cursor: this.cursor, hasPaste: this.hasPaste };
+    this.buffer = ''; this.cursor = 0; this.hasPaste = false; this.menuIndex = 0; this.render();
+  }
+  closeOverlay(selected) {
+    if (!this.overlay) return;
+    const saved = this.overlay;
+    this.overlay = null;
+    this.buffer = selected ? selected.text : saved.buffer;
+    this.cursor = selected ? chars(selected.text).length : saved.cursor;
+    this.hasPaste = selected ? selected.pasted : saved.hasPaste;
+    this.menuIndex = -1; this.hint = ''; this.render();
+  }
+  choices() {
+    if (this.overlay?.kind === 'palette') return searchCommands(this.buffer).map(([text, label]) => ({text, label: `${label}  ${text}`, pasted: false}));
+    if (this.overlay?.kind === 'history') return [...this.history].reverse().filter(item => item.text.toLowerCase().includes(this.buffer.toLowerCase())).map(item => ({...item, label: item.text.replace(/\n/g, ' ↵ ')}));
+    return [];
+  }
+  recoverPrompt(text, pasted = false) {
+    this.recovery = {text, pasted};
+    if (!this.buffer && !this.pending && !this.overlay) this.restorePrompt();
+    else { this.hint = '취소한 요청 보관됨 · 입력을 비운 뒤 F4 복구'; this.render(); }
+  }
+  restorePrompt() {
+    if (!this.recovery || this.overlay || (this.pending && !this.pending.normal)) return;
+    if (this.buffer) { this.hint = '현재 초안을 먼저 비워주세요. 취소한 요청은 보관되어 있습니다.'; this.render(); return; }
+    this.buffer = this.recovery.text; this.hasPaste = this.recovery.pasted;
+    this.cursor = chars(this.buffer).length; this.recovery = null;
+    this.hint = '취소한 요청을 복구했습니다. 수정 후 Enter로 다시 전송하세요.'; this.render();
+  }
+  shortcuts() {
+    if (this.overlay) return ' ↑↓ 선택 · Enter 입력창에 넣기 · Esc 돌아가기';
+    if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
+    if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
+    if (!this.pending) return ' Ctrl+C 작업 취소 · 초안 편집 가능 · F2 로그';
+    return ' Ctrl+R 기록 · Ctrl+P 명령 · F4 복구 · Enter 전송 · Alt+Enter 줄바꿈';
+  }
   menu() {
+    if (this.overlay) return this.choices().map(item => item.label);
     if (!this.pending || this.pending.hidden || this.pending.label !== chatPrompt) return [];
     const prefix = chars(this.buffer).slice(0, this.cursor).join('');
     const references = fileCompletions(prefix, this.files);
@@ -89,8 +132,9 @@ export class ConsoleUI extends EventEmitter {
   ask(label, hidden, signal) {
     if (this.closed || signal?.aborted) return Promise.reject(new Error('Cancelled.'));
     if (this.pending) return Promise.reject(new Error('Input already pending.'));
+    if (this.overlay) this.closeOverlay();
     const normal = label === chatPrompt;
-    if (!normal) { this.savedDraft = { buffer: this.buffer, cursor: this.cursor }; this.buffer = ''; this.cursor = 0; }
+    if (!normal) { this.savedDraft = { buffer: this.buffer, cursor: this.cursor, hasPaste: this.hasPaste }; this.hasPaste = false; this.buffer = ''; this.cursor = 0; }
     return new Promise((resolve, reject) => {
       const abort = () => this.finish(undefined, new Error('Cancelled.'));
       this.pending = { label: safe(label), hidden, normal, resolve, reject, signal, abort };
@@ -100,6 +144,11 @@ export class ConsoleUI extends EventEmitter {
   }
   finish(value, error) {
     const pending = this.pending; if (!pending) return;
+    if (!error && pending.normal && value?.trim()) {
+      this.history = this.history.filter(item => item.text !== value);
+      this.history.push({text: value, pasted: Boolean(this.hasPaste)});
+      while (this.history.length > 100 || this.history.reduce((n, item) => n + item.text.length, 0) > 200000) this.history.shift();
+    }
     this.pending = null; this.lastInputWasPaste = pending.normal && Boolean(this.hasPaste); this.hasPaste = false; pending.signal?.removeEventListener('abort', pending.abort);
     if (!error && !pending.hidden && value?.trim()) this.append(`\n나 › ${value}\n`);
     this.buffer = ''; this.cursor = 0; this.menuIndex = -1;
@@ -116,18 +165,21 @@ export class ConsoleUI extends EventEmitter {
     if (key.name === 'paste-start') { this.pasting = true; this.hasPaste = true; this.pasteText = ''; return; }
     if (key.name === 'paste-end') { this.pasting = false; this.insert(safe(this.pasteText)); this.pasteText = ''; this.render(); return; }
     if (this.pasting) { if (text && this.pasteText.length <= 65536) this.pasteText += text.replace(/\r/g,'\n'); return; }
-    if (key.ctrl && key.name === 'c') { this.emit('SIGINT'); return; }
+    if (key.ctrl && key.name === 'c') { if (this.overlay) this.closeOverlay(); else this.emit('SIGINT'); return; }
+    if (key.ctrl && ['r','p'].includes(key.name)) { this.openOverlay(key.name === 'r' ? 'history' : 'palette'); return; }
+    if (key.name === 'f4') { this.restorePrompt(); return; }
     if (key.name === 'pageup') { this.scroll = Math.min(this.lines().length, this.scroll + Math.max(1,this.height-8)); this.render(); return; }
     if (key.name === 'pagedown') { this.scroll = Math.max(0, this.scroll - Math.max(1,this.height-8)); this.render(); return; }
     if (key.ctrl && key.name === 'end') { this.scroll = 0; this.render(); return; }
     if (key.name === 'f2') { this.expanded = !this.expanded;this.scroll=0;this.render();return; }
-    if (key.name === 'escape') { this.menuIndex=-1; this.render();return; }
+    if (key.name === 'escape') { if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
     this.hint='';
     const menu=this.menu();
     if(menu.length && ['up','down','tab'].includes(key.name)) {
       const direction=key.name==='up'?-1:1;this.menuIndex=(this.menuIndex+direction+menu.length)%menu.length;this.render();return;
     }
     if (key.name==='return' && !key.meta && !key.shift) {
+      if (this.overlay) { const choice = this.choices()[Math.max(0,this.menuIndex)]; if (choice) this.closeOverlay(choice); return; }
       if(menu.length && this.menuIndex>=0){this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;this.render();return;}
       if(this.pending) this.finish(this.buffer); else {this.hint='작업 중입니다. 초안을 편집하고 완료 후 전송하세요.';this.render();} return;
     }
@@ -145,7 +197,7 @@ export class ConsoleUI extends EventEmitter {
     else if (key.name==='backspace') {const p=chars(this.buffer);if(this.cursor>0)p.splice(--this.cursor,1);this.buffer=p.join('');}
     else if (key.name==='delete') {const p=chars(this.buffer);p.splice(this.cursor,1);this.buffer=p.join('');}
     else if (text && !key.ctrl && !key.meta) this.insert(safe(text));
-    this.menuIndex=-1;this.render();
+    this.menuIndex=this.overlay ? 0 : -1;this.render();
   }
   render() {
     if(this.closed)return;
@@ -162,6 +214,7 @@ export class ConsoleUI extends EventEmitter {
     const inputHeight=Math.min(4,Math.max(1,draftLines.length),Math.max(1,h-7));
     const first=Math.max(0,cursorRow-inputHeight+1);
     const menu=this.menu();const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
+    if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-7));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-5);
     const all=this.lines();this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
@@ -171,10 +224,10 @@ export class ConsoleUI extends EventEmitter {
     rows.push(line(` ${this.scroll ? '최신 답변 ↓ Ctrl+End · ' : ''}토큰${s.usageEstimated?'(추정 포함)':''} ${s.used||0}/${s.budget||0} · 잔여 ${Math.max(0,(s.budget||0)-(s.used||0))} · 초안 추정 ${s.estimate||0}`));
     for(const option of options.slice(0,menuHeight))rows.push(line(`${option===menu[this.menuIndex]?' ›':'  '} ${option}`));
     const inputTop=rows.length;
-    const inputLabel=fit(` ─ ${pending?.hidden?'키 숨김 입력':pending&&!pending.normal?pending.label:'메시지'} `,w);
+    const inputLabel=fit(` ─ ${this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색 (한글 가능)') : pending?.hidden?'키 숨김 입력':pending&&!pending.normal?pending.label:'메시지'} `,w);
     rows.push(accent(inputLabel+'─'.repeat(Math.max(0,w-displayWidth(inputLabel)))));
     for(let i=0;i<inputHeight;i++)rows.push(line(` ${i===0?'›':'│'} ${draftLines[first+i]||''}`));
-    rows.push(line(this.hint||' Enter 전송 · Alt+Enter/Ctrl+J 줄바꿈 · PgUp/PgDn 스크롤 · F2 로그'));
+    rows.push(line(this.hint||this.shortcuts()));
     const rendered=rows.slice(0,h).map((r,i)=>`\x1b[${i+1};1H\x1b[2K${r}`).join('');
     const cursorY=Math.min(h-1,inputTop+2+cursorRow-first);
     const cursorX=Math.min(w,4+position.col);

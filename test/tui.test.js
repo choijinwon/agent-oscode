@@ -51,3 +51,31 @@ test('file references complete inside natural language before submission',async 
  ui.key('',{name:'tab'});input.write('\r');assert.equal(ui.buffer,'수정해줘 @src/Button.vue');assert(ui.pending);
  input.write('\r');assert.equal(await answer,'수정해줘 @src/Button.vue');
 });
+test('history search restores multiline input without sending and excludes settings secrets',async t=>{
+ const {ui,input}=fixture(t);
+ let answer=ui.question(chatPrompt);input.write('\x1b[200~한글\n수정 요청\x1b[201~\r');await answer;
+ answer=ui.questionHidden('API key');input.write('secret-example\r');await answer;
+ answer=ui.question('모델 이름');input.write('private-model\r');await answer;
+ const next=ui.question(chatPrompt);input.write('기존 초안');ui.key('',{ctrl:true,name:'r'});input.write('수정');
+ assert.equal(ui.choices().length,1);assert.equal(ui.history.length,1);
+ input.write('\r');assert.equal(ui.buffer,'한글\n수정 요청');assert(ui.pending);assert.equal(ui.hasPaste,true);
+ input.write('\r');assert.equal(await next,'한글\n수정 요청');
+});
+test('Korean palette inserts commands, Escape preserves drafts, and empty search does not submit',async t=>{
+ const {ui,input}=fixture(t);const next=ui.question(chatPrompt);input.write('원래 요청');
+ ui.key('',{ctrl:true,name:'p'});input.write('없는명령어');input.write('\r');assert(ui.overlay);assert(ui.pending);
+ ui.key('',{name:'escape'});assert.equal(ui.buffer,'원래 요청');
+ ui.key('',{ctrl:true,name:'p'});input.write('모델 설정');input.write('\r');assert.equal(ui.buffer,'/settings');assert(ui.pending);
+ input.write('\r');assert.equal(await next,'/settings');
+});
+test('cancel recovery preserves newer drafts and settings disable history shortcuts',async t=>{
+ const {ui,input}=fixture(t);ui.buffer='다음 요청';ui.cursor=5;
+ ui.recoverPrompt('취소된 요청');assert.equal(ui.buffer,'다음 요청');assert(ui.recovery);
+ ui.key('',{name:'f4'});assert.equal(ui.buffer,'다음 요청');
+ ui.buffer='';ui.cursor=0;ui.key('',{name:'f4'});assert.equal(ui.buffer,'취소된 요청');assert.equal(ui.recovery,null);
+ const key=ui.questionHidden('Key');ui.key('',{ctrl:true,name:'r'});assert.equal(ui.overlay,null);
+ assert.match(ui.shortcuts(),/기록하지/);input.write('fake\r');await key;assert.equal(ui.buffer,'취소된 요청');assert.equal(ui.history.length,0);
+});
+test('cancelled prompt restores immediately when no newer draft exists',t=>{
+ const {ui}=fixture(t);ui.recoverPrompt('/exit\ncode',true);assert.equal(ui.buffer,'/exit\ncode');assert.equal(ui.hasPaste,true);
+});

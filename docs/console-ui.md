@@ -107,3 +107,27 @@ No key is needed for diagnosis; model-driven repair requires a configured model.
 Blocked, cancelled and timed-out checks are not offered as fixable code errors.
 The new report is the result; model completion alone does not mean the fix passed.
 There is no automatic retry loop or guarantee that the model finds the cause.
+
+## Input convenience shortcuts
+
+- **Ctrl+R** searches submitted input from this running console. Type Korean or
+  other text to filter, use up/down to select, and Enter to load it into the
+  composer. A second Enter submits it. Multiline paste retains its prompt-only
+  behavior when recalled. History holds at most 100 unique entries / 200k
+  characters in memory; it is not imported from previous sessions. Hidden key
+  prompts, model-setting responses and approval answers never enter this history.
+- **Ctrl+P** opens the command palette. Search by Korean description or slash
+  command (for example `모델 설정` or `/settings`). Enter loads the command without
+  running it. Esc or Ctrl+C closes either search and restores the original draft
+  and editing cursor. Search is disabled during key entry and approval prompts.
+- **Ctrl+C during a model operation** cancels the work and restores its request
+  when the composer is empty. If a newer draft exists, it stays intact; clear the
+  draft and press **F4** to retrieve the cancelled request. Recovery holds one
+  request in memory, does not undo already-applied changes and does not resend
+  anything automatically. Ctrl+C while idle retains its existing exit behavior.
+- The footer changes to show relevant controls for chat, search, settings,
+  hidden key entry, approval and running work.
+
+These conveniences are available in the default full-screen console. They add
+no model calls. Input composed by an operating-system IME depends on the terminal;
+this feature does not implement or claim control of IME composition events.
