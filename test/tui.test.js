@@ -109,12 +109,12 @@ test('boxed composer stays within narrow and wide terminals and hides zero usage
 test('wide landing and conversation keep composer at the bottom',async t=>{
  const {ui,output,text,clear}=fixture(t);output.columns=180;output.rows=48;
  ui.renderedRows=[];clear();ui.render();
- assert(text().includes('프론트엔드 작업을 시작하세요'));
+ assert(text().includes('무엇을 만들어볼까요?'));
  const cursor=text().match(/\x1b\[(\d+);(\d+)H\x1b\[\?25h$/);assert(cursor);assert(Number(cursor[2])>30);assert(Number(cursor[1])>40);
  ui.append('짧은 답변');ui.renderedRows=[];clear();ui.render();
  const rows=text().split(/\x1b\[\d+;1H\x1b\[2K/).slice(1);
  const message=rows.findIndex(row=>row.includes('짧은 답변'));const box=rows.findIndex(row=>row.includes('╭'));
- assert(message>=0);assert.equal(box-message,2);assert(box>40);assert(!text().includes('프론트엔드 작업을 시작하세요'));
+ assert(message>=0);assert.equal(box-message,2);assert(box>40);assert(!text().includes('무엇을 만들어볼까요?'));
  output.columns=32;output.rows=12;output.emit('resize');assert.equal(ui.composerWidth,31);
 });
 test('model picker filters and confirms a model without entering chat history',async t=>{
@@ -292,4 +292,15 @@ test('composer buttons queue and retrieve a request by mouse without cancelling 
   assert(ui.buttons.every(b=>b.x+b.width-1<=columns));
  }
  click('queue');const result=await ui.question(chatPrompt);assert.equal(result,'다음 작업');assert.equal(cancelled,0);
+});
+
+
+test('minimal toolbar expands tools without losing draft or moving composer',async t=>{
+ const {ui,input,output}=fixture(t);output.columns=100;const answer=ui.question(chatPrompt);input.write('작성 중인 요청');
+ const row=ui.buttons.find(b=>b.action==='send').y;
+ assert(!ui.buttons.some(b=>b.action==='copy'));assert(ui.buttons.some(b=>b.action==='settings'));
+ const more=ui.buttons.find(b=>b.action==='more');input.write(`\x1b[<0;${more.x};${more.y}M`);
+ for(const action of ['paste','copy','preview','attach'])assert(ui.buttons.some(b=>b.action===action));
+ assert.equal(ui.buttons.find(b=>b.action==='send').y,row);assert.equal(ui.buffer,'작성 중인 요청');
+ ui.buttonAction('more');assert(ui.buttons.some(b=>b.action==='settings'));ui.buttonAction('send');assert.equal(await answer,'작성 중인 요청');
 });

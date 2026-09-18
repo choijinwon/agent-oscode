@@ -208,7 +208,7 @@ export class ConsoleUI extends EventEmitter {
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
     if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
     if (!this.pending) return this.queuedPrompt?' 다음 요청 대기 중 · Esc 꺼내기 · Ctrl+C 작업 취소':this.multiline?' Enter 줄바꿈 · F5 다음 요청 대기 · Ctrl+C 취소':' Enter 다음 요청 대기 · Ctrl+C 취소 · F2 로그';
-    return this.multiline ? ' Enter 줄바꿈 · F5 전송 · Tab 모드 전환 · F3 한 줄' : ' Enter 전송 · Ctrl+J 줄바꿈 · Tab 모드 전환 · F3 여러 줄';
+    return this.multiline ? ' Enter 줄바꿈 · F5 전송 · Tab 모드 전환 · F3 한 줄' : ' Enter 전송   ·   Ctrl+J 줄바꿈   ·   / 명령';
   }
   menu() {
     if (this.pending?.choices) return this.selection().map(item=>item.label);
@@ -271,6 +271,7 @@ export class ConsoleUI extends EventEmitter {
     if(action==='newAgent'&&!this.closed){this.emit('newAgent');return;}
     if(action.startsWith('agent:')&&!this.closed){this.emit('selectAgent',Number(action.slice(6)));return;}
     if(this.closed || this.overlay || this.settingsView || this.pending && !this.pending.normal)return;
+    if(action==='more'){this.moreActions=!this.moreActions;this.render();return;}
     if(action==='copy')return this.copyContent('answer');
     if(action==='paste')return this.pasteContent();
     if(action==='stop'){if(!this.pending)this.emit('SIGINT');return;}
@@ -416,25 +417,22 @@ export class ConsoleUI extends EventEmitter {
       while(body.length<bodyHeight)body.push('');
     } else if(home) {
       const welcome = [
+        '무엇을 만들어볼까요?',
         '',
-        '프론트엔드 작업을 시작하세요',
+        '아이디어를 적거나, @파일을 첨부하세요.',
         'React · Vue · Angular · Svelte',
         '',
-        '/frontend   프로젝트 살펴보기',
-        '/settings   모델 설정     /key   API 키 입력',
-        '',
-        '예: @src/Button.vue 로딩 상태를 추가해줘',
-        'Ctrl+P 명령 찾기  ·  Ctrl+R 입력 기록',
+        '/ 명령 찾기    ·    + 도구 더 보기',
         ''
       ];
       body=welcome.slice(0,bodyHeight);
-      while(body.length<bodyHeight)body.push('');
+      while(body.length<bodyHeight)body.unshift('');
     } else {
       // Anchor the newest conversation row above the fixed composer; older rows grow upward.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.directory||s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.stage}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
-      if(home && i===1)return accent(line(' '+t));
+    const rows=[accent(line(` OSCODE  /  ${s.project||s.directory?.split('/').filter(Boolean).at(-1)||'workspace'}`)),muted(line(` ${s.model||'모델을 연결하세요'}  ·  ${this.stage}`)),...body.map((t,i)=>{
+      if(home && t==='무엇을 만들어볼까요?')return accent(line(' '+t));
       const index=i-(bodyHeight-(end-start));
       if(!home && !this.settingsView && index>=0 && index<end-start) {
         const row=styled[start+index];const track=all.length>bodyHeight;
@@ -458,7 +456,7 @@ export class ConsoleUI extends EventEmitter {
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
     if(this.communicationTimer && !this.settingsView && !this.overlay) rows.push(accent(line(` ${this.communicationLabel()}${this.queuedPrompt?' · 다음 요청 대기 중':''} · Ctrl+C 취소`)));
-    else rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · Ctrl+V 붙여넣기' : ''}`)));
+    else rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}`)));
     for(const option of options.slice(0,menuHeight)) {
       const selected=option===menu[this.menuIndex];
       const description=!this.overlay&&!pending?.choices ? commandPalette.find(([command])=>command===option)?.[1] : '';
@@ -466,12 +464,12 @@ export class ConsoleUI extends EventEmitter {
       rows.push(selected?surface(value):muted(value));
     }
     const inputTop=rows.length;
-    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;
-    const label = fit(` ${title} `,box-2);
+    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : this.overlay.kind === 'files' ? '첨부 파일 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : (this.multiline ? '여러 줄 작성' : '');
+    const label = title ? fit(` ${title} `,box-2) : '';
     rows.push(border(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
     for(let i=0;i<inputHeight;i++) {
       const placeholder=!draft && i===0 && !pending?.hidden && (!pending || pending.normal) && !this.overlay;
-      const value=placeholder ? '어떤 작업을 할까요?  @파일로 범위를 지정하세요' : draftLines[first+i]||'';
+      const value=placeholder ? (!pending ? '다음 요청을 미리 적어두세요…' : '만들고 싶은 것을 설명해주세요…') : draftLines[first+i]||'';
       const content=fit(value,box-4);
       rows.push(`${border('│')}${surface('  '+content+' '.repeat(Math.max(0,box-4-displayWidth(content))))}${border('│')}`);
     }
@@ -484,31 +482,36 @@ export class ConsoleUI extends EventEmitter {
           ? {action:'unqueue',label:box<40?'[↶ 수정]':'[↶ 대기 수정]',enabled:true,primary:true}
           : {action:'queue',label:box<40?'[↓ 대기]':'[↓ 다음 요청]',enabled:Boolean(this.buffer.trim()),primary:true};
       const actions=[...(!pending?[{action:'stop',label:'[■ 중단]',enabled:true}]:[]),primary];
-      const items=[...(this.tabs?[{action:'newAgent',label:'[+]',enabled:true}]:[]),{action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
+      const more={action:'more',label:this.moreActions?'[×]':'[+]',enabled:true};
+      const items=[more,...(this.moreActions ? [
+        ...(this.tabs?[{action:'newAgent',label:'[새 에이전트]',enabled:true}]:[]),
+        {action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
         {action:'copy',label:'[복사]',enabled:!this.copying},
         {action:'preview',label:compact?'[웹]':'[미리보기]',enabled:Boolean(pending)},
-        {action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
-        {action:'mode',label:`[${s.mode||'BUILD'}]`,enabled:Boolean(pending)},
-        {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},...actions];
+        {action:'attach',label:'[첨부]',enabled:Boolean(pending)}
+      ] : [
+        {action:'mode',label:`[${s.mode==='PLAN'?'계획':'빌드'} ▾]`,enabled:Boolean(pending)},
+        {action:'settings',label:compact?'[모델 ▾]':`[${fit(s.model||'모델 연결',20)} ▾]`,enabled:Boolean(pending)}
+      ]),...actions];
       const chip=item=>{
         if(!color)return item.label;
-        const style=!item.enabled?'38;5;242;48;5;235':item.primary?'1;38;5;232;48;5;153':'38;5;252;48;5;238';
+        const style=!item.enabled?'38;5;242;48;5;235':item.primary?'1;38;5;232;48;5;255':'38;5;250;48;5;235';
         return `\x1b[${style}m ${item.label.slice(1,-1)} \x1b[0m`;
       };
       let used=0;const segments=[];
-      const visibleItems=box<40?items.filter(item=>item.action==='paste'||actions.includes(item)):items;
+      const visibleItems=box<40?items.filter(item=>item.action==='more'||actions.includes(item)):items;
       for(const item of visibleItems) {
         const width=displayWidth(item.label);
         const remaining=actions.slice(actions.includes(item)?actions.indexOf(item)+1:0);
         const reserve=remaining.reduce((n,action)=>n+displayWidth(action.label)+1,0);
         if(used+width+reserve>box-4)continue;
         const gap=item===actions[0]?Math.max(0,box-4-used-width-reserve):0;
-        segments.push(' '.repeat(gap));used+=gap;
+        segments.push(surface(' '.repeat(gap)));used+=gap;
         if(item.enabled)this.buttons.push({action:item.action,x:left+4+used,y:top+rows.length+1,width});
         segments.push(chip(item));used+=width;
-        if(used<box-4){segments.push(' ');used++;}
+        if(used<box-4){segments.push(surface(' '));used++;}
       }
-      rows.push(border('│')+'  '+segments.join('')+' '.repeat(Math.max(0,box-4-used))+border('│'));
+      rows.push(border('│')+surface('  ')+segments.join('')+surface(' '.repeat(Math.max(0,box-4-used)))+border('│'));
     }
     const positionLabel=draftLines.length>1 ? ` ${cursorRow+1}/${draftLines.length}줄 ` : '';
     const bottom=fit(positionLabel,box-2);
