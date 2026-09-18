@@ -299,9 +299,9 @@ export class ConsoleUI extends EventEmitter {
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
     if(action==='mode'){this.emit('toggleMode');this.render();return;}
-    if(action==='settings'||action==='preview'||action==='skills'||action==='style') {
+    if(action==='settings'||action==='preview'||action==='skills'||action==='style'||action==='approval') {
       const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
-      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':action==='style'?'/style':'/settings');Object.assign(this,draft);this.render();
+      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':action==='style'?'/style':action==='approval'?'/approval':'/settings');Object.assign(this,draft);this.render();
     }
   }
   mouse(sequence) {
@@ -452,7 +452,7 @@ export class ConsoleUI extends EventEmitter {
       // Anchor the newest conversation row above the fixed composer; older rows grow upward.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.project||s.directory?.split('/').filter(Boolean).at(-1)||'workspace'}`)),muted(line(` ${s.model||'모델을 연결하세요'}${s.skill?`  ·  ${safe(s.skill)}`:''}  ·  ${this.stage}`)),...body.map((t,i)=>{
+    const rows=[accent(line(` OSCODE  /  ${s.project||s.directory?.split('/').filter(Boolean).at(-1)||'workspace'}`)),muted(line(` ${s.model||'모델을 연결하세요'}${s.approval?`  ·  ${s.approval}`:''}${s.skill?`  ·  ${safe(s.skill)}`:''}  ·  ${this.stage}`)),...body.map((t,i)=>{
       if(home && t==='무엇을 만들어볼까요?')return accent(line(' '+t));
       const index=i-(bodyHeight-(end-start));
       if(!home && !this.settingsView && index>=0 && index<end-start) {
@@ -522,6 +522,7 @@ export class ConsoleUI extends EventEmitter {
       const actions=[...(!pending?[{action:'stop',label:'[■ 중단]',enabled:true}]:[]),primary];
       const more={action:'more',label:this.moreActions?'[×]':'[+]',enabled:true};
       const items=[more,...(this.moreActions ? [
+        {action:'approval',label:'[승인]',enabled:Boolean(pending)},
         {action:'style',label:'[스타일]',enabled:Boolean(pending)},
         ...(this.tabs?[{action:'newAgent',label:'[새 에이전트]',enabled:true}]:[]),
         {action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
