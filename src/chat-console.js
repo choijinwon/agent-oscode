@@ -1,7 +1,7 @@
 import readline from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
-export const chatCommands = ['/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
+export const chatCommands = ['/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan off', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
 export function completeCommand(line) {
   if (!line.startsWith('/')) return [[], line];
   return [chatCommands.filter(command => command.startsWith(line)), line];

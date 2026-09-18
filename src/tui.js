@@ -127,6 +127,7 @@ export class ConsoleUI extends EventEmitter {
     finally { this.copying = false; this.render(); }
   }
   shortcuts() {
+    if (this.completionOpen && this.buffer.startsWith('/')) return ' ↑↓ 명령 선택 · Enter 실행 · Esc 닫기';
     if (this.pending?.choices) return ' 이름 검색 · ↑↓ 선택 · Enter 확정 · Ctrl+C 취소';
     if (this.overlay) return ' ↑↓ 선택 · Enter 입력창에 넣기 · Esc 돌아가기';
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
@@ -185,7 +186,7 @@ export class ConsoleUI extends EventEmitter {
   }
   key(text = '', key) {
     if (this.closed) return;
-    if (key.name === 'paste-start') { this.pasting = true; this.hasPaste = true; this.pasteText = ''; return; }
+    if (key.name === 'paste-start') { this.completionOpen = false; this.menuIndex = -1; this.pasting = true; this.hasPaste = true; this.pasteText = ''; return; }
     if (key.name === 'paste-end') { this.pasting = false; this.insert(safe(this.pasteText)); this.pasteText = ''; this.render(); return; }
     if (this.pasting) { if (text && this.pasteText.length <= 65536) this.pasteText += text.replace(/\r/g,'\n'); return; }
     if (['f6','f7','f8'].includes(key.name)) { return this.copyContent({f6:'answer',f7:'code',f8:'draft'}[key.name]); }
@@ -214,9 +215,16 @@ export class ConsoleUI extends EventEmitter {
     if (key.name==='return' && !key.meta && !key.shift) {
       if (this.pending?.choices) { const choice=this.selection()[Math.max(0,this.menuIndex)]; if(choice)this.finish(choice.value);return; }
       if (this.overlay) { const choice = this.choices()[Math.max(0,this.menuIndex)]; if (choice) this.closeOverlay(choice); return; }
-      if(this.completionOpen && menu.length && this.menuIndex>=0){this.completionOpen=false;this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;this.render();return;}
+      if(this.completionOpen && menu.length && this.menuIndex>=0){
+        const slash=this.buffer.startsWith('/') && !this.hasPaste;
+        this.completionOpen=false;this.buffer=menu[this.menuIndex];this.cursor=chars(this.buffer).length;this.menuIndex=-1;
+        if(slash && !this.buffer.endsWith(' '))this.finish(this.buffer);
+        else this.render();
+        return;
+      }
       if(this.pending) this.finish(this.buffer); else {this.hint='작업 중입니다. 초안을 편집하고 완료 후 전송하세요.';this.render();} return;
     }
+    const previousBuffer = this.buffer;
     const parts = chars(this.buffer);
     const lineStart = parts.slice(0,this.cursor).lastIndexOf('\n') + 1;
     const nextBreak = parts.indexOf('\n',this.cursor);
@@ -240,7 +248,9 @@ export class ConsoleUI extends EventEmitter {
     else if (key.name==='backspace') {const p=chars(this.buffer);if(this.cursor>0)p.splice(--this.cursor,1);this.buffer=p.join('');}
     else if (key.name==='delete') {const p=chars(this.buffer);p.splice(this.cursor,1);this.buffer=p.join('');}
     else if (text && !key.ctrl && !key.meta) this.insert(safe(text));
-    this.completionOpen=false; this.menuIndex=this.overlay || this.pending?.choices ? 0 : -1;this.render();
+    const slash=this.pending?.normal && !this.overlay && !this.hasPaste && this.buffer.startsWith('/') && !this.buffer.includes('\n') && this.menu().length>0;
+    this.completionOpen=Boolean(slash && (this.buffer!==previousBuffer || this.completionOpen));
+    this.menuIndex=this.overlay || this.pending?.choices || this.completionOpen ? 0 : -1;this.render();
   }
   render() {
     if(this.closed)return;

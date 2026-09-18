@@ -24,8 +24,7 @@ test('smart scroll preserves viewport while output arrives and supports jump to 
 });
 test('menu selects before sending and multiline cursor stays visible after resize',async t=>{
  const {ui,input,output}=fixture(t);const answer=ui.question(chatPrompt);
- input.write('/set');ui.key('',{name:'tab'});input.write('\r');assert.equal(ui.buffer,'/settings');assert(ui.pending);
- input.write('\r');assert.equal(await answer,'/settings');
+ input.write('/set');assert(ui.completionOpen);input.write('\r');assert.equal(await answer,'/settings');
  const next=ui.question(chatPrompt);input.write('한글'.repeat(80));const before=ui.buffer;output.columns=26;output.emit('resize');
  assert.equal(ui.buffer,before);ui.key('',{name:'up'});assert(ui.cursor<160);
  input.write('\r');assert.equal(await next,before);
@@ -85,9 +84,9 @@ test('multiline mode uses Enter for newline and F5 for explicit send; settings r
  ui.key('',{name:'f5'});assert.equal(await answer,'첫 줄\n둘째 줄');
  const setting=ui.question('설정');input.write('value\r');assert.equal(await setting,'value');
 });
-test('completion does not intercept arrows until Tab; line editing preserves surrounding text',async t=>{
- const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'down'});assert.equal(ui.menuIndex,-1);
- input.write('\r');assert.equal(await answer,'/set');
+test('slash completion uses arrows immediately; line editing preserves surrounding text',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'down'});assert.equal(ui.menuIndex,0);
+ input.write('\r');assert.equal(await answer,'/settings');
  ui.buffer='앞 줄\nhello world\n뒤 줄';ui.cursor=15;
  ui.key('',{ctrl:true,name:'w'});assert.equal(ui.buffer,'앞 줄\nhello \n뒤 줄');
  ui.key('',{ctrl:true,name:'a'});assert.equal(ui.cursor,4);
@@ -130,7 +129,7 @@ test('Tab requests mode toggle only in ordinary idle chat and preserves the draf
  assert.equal(toggles,1);assert.equal(ui.buffer,'작성 중인 요청');assert(ui.pending);
  input.write('\r');await answer;ui.key('',{name:'tab'});assert.equal(toggles,1);
  const setting=ui.questionHidden('키');ui.key('',{name:'tab'});assert.equal(toggles,1);input.write('fake\r');await setting;
- const next=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'tab'});assert.equal(toggles,1);assert(ui.completionOpen);input.write('\r\r');assert.equal(await next,'/settings');
+ const next=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'tab'});assert.equal(toggles,1);assert(ui.completionOpen);input.write('\r');assert.equal(await next,'/settings');
 });
 
 test('copy shortcuts preserve multiline drafts and cursor without submitting',async t=>{
@@ -151,4 +150,20 @@ test('copy is blocked for secrets and overlays; failures and duplicate requests 
  let finish;ui.copy=()=>{count++;return new Promise(resolve=>{finish=resolve;});};
  const pending=ui.key('',{name:'f6'});await ui.key('',{name:'f7'});assert.equal(count,1);finish();await pending;
  input.write('\r');await answer;
+});
+
+test('slash opens and filters commands; Escape closes until editing and argument commands stay editable',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);
+ input.write('/');assert(ui.completionOpen);assert(ui.menu().includes('/settings'));
+ ui.key('',{name:'down'});assert.equal(ui.menuIndex,1);
+ ui.key('',{name:'escape'});assert(!ui.completionOpen);assert.equal(ui.buffer,'/');
+ ui.key('',{name:'left'});assert(!ui.completionOpen);ui.key('',{name:'right'});
+ input.write('context add');assert(ui.completionOpen);input.write('\r');assert(ui.pending);assert.equal(ui.buffer,'/context add ');
+ input.write('src/App.tsx\r');assert.equal(await answer,'/context add src/App.tsx');
+});
+test('slash menu stays closed for pasted text, settings, and paths inside prose',async t=>{
+ const {ui,input}=fixture(t);let answer=ui.question(chatPrompt);
+ input.write('경로 /src');assert(!ui.completionOpen);input.write('\r');await answer;
+ answer=ui.questionHidden('Key');input.write('/set');assert(!ui.completionOpen);input.write('\r');await answer;
+ answer=ui.question(chatPrompt);input.write('\x1b[200~/set\x1b[201~');assert(!ui.completionOpen);input.write('\r');assert.equal(await answer,'/set');
 });
