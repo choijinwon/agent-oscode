@@ -80,6 +80,25 @@ export class ConsoleUI extends EventEmitter {
   log(title, text) { this.mutate(() => { this.entries.push({ type: 'log', title: safe(title), text: `${safe(title)}\n${safe(text)}\n` }); this.bound(); }); }
   preview(text) { this.panel = text.startsWith('$') ? '실행 검토' : '변경 검토'; this.append(`\n── ${this.panel} (y 적용 / n 취소) ──\n${text}\n`); this.scroll = 0; this.render(); }
   setStage(stage) { this.stage = stage; this.render(); }
+  setCommunicating(active) {
+    if (this.closed) return;
+    if (active && !this.communicationTimer) {
+      this.communicationFrame = 0;
+      this.communicationTimer = setInterval(() => {
+        this.communicationFrame = (this.communicationFrame + 1) % 8;
+        this.render();
+      }, 240);
+      this.communicationTimer.unref?.();
+    } else if (!active) {
+      clearInterval(this.communicationTimer); this.communicationTimer = null;
+    }
+    this.render();
+  }
+  communicationLabel() {
+    if (!this.communicationTimer) return this.stage;
+    const frames = ['🐳      ·', ' 🐳     ·', '  🐳    ˚', '   🐳   °', '    🐳  ˚', '   🐳   ·', '  🐳    ·', ' 🐳     ·'];
+    return `${frames[this.communicationFrame]} 데이터 통신 중…`;
+  }
   openOverlay(kind) {
     if (!this.pending?.normal || this.pending.hidden) return;
     if (this.overlay) this.closeOverlay();
@@ -306,7 +325,7 @@ export class ConsoleUI extends EventEmitter {
       // Keep short conversations beside the composer instead of far above it.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.stage}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>home && i===1 ? accent(line(' '+t)) : line(' '+t))];
+    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>home && i===1 ? accent(line(' '+t)) : line(' '+t))];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
     rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
@@ -334,6 +353,7 @@ export class ConsoleUI extends EventEmitter {
   }
   close() {
     if(this.closed)return;
+    clearInterval(this.communicationTimer); this.communicationTimer = null;
     if(this.pending)this.finish(undefined,new Error('Closed.'));
     this.closed=true;this.input.off('keypress',this.keyListener);this.input.off('end',this.endListener);this.output.off('resize',this.resizeListener);
     this.input.setRawMode?.(this.oldRaw);this.input.pause();

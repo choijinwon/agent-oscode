@@ -167,3 +167,16 @@ test('slash menu stays closed for pasted text, settings, and paths inside prose'
  answer=ui.questionHidden('Key');input.write('/set');assert(!ui.completionOpen);input.write('\r');await answer;
  answer=ui.question(chatPrompt);input.write('\x1b[200~/set\x1b[201~');assert(!ui.completionOpen);input.write('\r');assert.equal(await answer,'/set');
 });
+
+test('whale animates during communication without changing draft or scroll and stops on completion/close',t=>{
+ t.mock.timers.enable({apis:['setInterval']});
+ const {ui,text}=fixture(t);
+ ui.append(Array.from({length:70},(_,i)=>`line ${i}`).join('\n'));ui.key('',{name:'pageup'});
+ ui.insert('작성 중인 초안');const cursor=ui.cursor,scroll=ui.scroll;
+ ui.setCommunicating(true);assert.match(ui.communicationLabel(),/🐳.*데이터 통신 중/);
+ const initial=ui.communicationLabel();t.mock.timers.tick(240);assert.notEqual(ui.communicationLabel(),initial);
+ assert.equal(ui.buffer,'작성 중인 초안');assert.equal(ui.cursor,cursor);assert.equal(ui.scroll,scroll);assert(text().includes('데이터 통신 중'));
+ ui.setCommunicating(true);assert.equal(ui.communicationFrame,1,'repeated start must not reset the animation');
+ ui.setCommunicating(false);assert.equal(ui.communicationLabel(),'대기');const frame=ui.communicationFrame;t.mock.timers.tick(1000);assert.equal(ui.communicationFrame,frame);
+ ui.setCommunicating(true);ui.close();assert.equal(ui.communicationTimer,null);t.mock.timers.tick(1000);assert.equal(ui.communicationFrame,0);
+});

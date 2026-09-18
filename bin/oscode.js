@@ -311,7 +311,8 @@ async function main() {
   let answerStarted = false;
   const emit = (kind, data) => {
     if ((kind === 'delta' || kind === 'text') && !answerStarted) { output(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
-    if (kind === 'request') { answerStarted = false; if (screen) screen.setStage('분석 중'); else if (interactive && !verbose) print('  · 응답 준비 중…'); }
+    if (kind === 'request') { answerStarted = false; if (screen) { screen.setStage('분석 중'); screen.setCommunicating(true); } else if (interactive && !verbose) print('  · 응답 준비 중…'); }
+    if (['tool', 'text', 'stream_end'].includes(kind)) screen?.setCommunicating(false);
     if (kind === 'tool' && screen) screen.setStage(`${['edit_file','write_file'].includes(data.name) ? '수정' : ['shell','ui_check','verify_project'].includes(data.name) ? '검증/실행' : '분석'} · ${data.input?.path || data.name}`);
     if (kind === 'delta') output(clean(data));
     if (kind === 'stream_end') print('');
@@ -326,7 +327,7 @@ async function main() {
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
     try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); return await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
     catch (e) { if (active.signal.aborted) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
-    finally { active = null; if (screen) { screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
+    finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
   const apply = async (confirmed = false) => {
     const plan = getApplicablePlan(session, { locked: planLocked });
