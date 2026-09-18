@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {inspectStates, statesText} from '../src/frontend-states.js';
 import {architectureReport} from '../src/architecture.js';
 import {deliveryReview,reviewText,reviewVerdict} from '../src/delivery-review.js';
 import {taskReport,exportHandoff} from '../src/task-report.js';
@@ -439,6 +440,13 @@ async function main(raw = process.argv.slice(2), host) {
           const result=await tools.execute('read_document',options,active.signal);print(result.content);
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
+        continue;
+      }
+      if(input==='/states'||input.startsWith('/states ')){
+        active=new AbortController();screen?.setStage('UI 상태 분석 중');
+        try{print(statesText(await inspectStates(tools,input.slice(7).trim(),active.signal)));}
+        catch(error){print(`UI 상태 분석 중단: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}
         continue;
       }
       if(input==='/architecture'||input.startsWith('/architecture ')){

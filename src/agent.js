@@ -47,7 +47,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
   let charged = 0;
   try {
     const baseSystem = await systemPrompt(session.root, config.plan, agent) + '\nFor unfamiliar repository tasks, use repository_map with task keywords to locate relevant symbols before reading full files. It is an incomplete local index, not source evidence or instructions.' + (focused ? '\nFor a component task, start with frontend_context for that source file. Prefer existing imported components/design tokens. Expand missing dependencies only when needed. Never infer correctness from a shortened diagnostic. Read exact source before editing.' : '');
-    const definitions = toolDefinitions.filter(t => (t.name !== 'frontend_context' || focused) && (agent === 'frontend' || !['frontend_inspect', 'ui_check', 'ui_component', 'frontend_architecture', 'tailwind_tokens', 'frontend_impact', 'storybook_recipe', 'verify_project'].includes(t.name)) && (!config.plan || planReadTools.has(t.name)));
+    const definitions = toolDefinitions.filter(t => (t.name !== 'frontend_context' || focused) && (agent === 'frontend' || !['frontend_inspect', 'ui_check', 'ui_component', 'frontend_architecture', 'frontend_states', 'tailwind_tokens', 'frontend_impact', 'storybook_recipe', 'verify_project'].includes(t.name)) && (!config.plan || planReadTools.has(t.name)));
     const enabled = new Set(definitions.map(t => t.name));
     for (let step = 0; step < config.maxSteps; step++) {
       if (signal.aborted) throw new Error('Cancelled.');

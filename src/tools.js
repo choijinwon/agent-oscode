@@ -1,3 +1,4 @@
+import {inspectStates} from './frontend-states.js';
 import {repositoryMap} from './repository-map.js';
 import {DocumentReader, isDocument} from './document-reader.js';
 import { changePreview } from './change-preview.js';
@@ -26,6 +27,7 @@ export const toolDefinitions = [
   tool('tailwind_tokens', 'Inspect bounded CSS tokens and literal arbitrary Tailwind utility candidates without executing configuration.', { path: str }, []),
   tool('frontend_impact', 'AST-based reverse import impact for a project source file, including root tsconfig aliases and re-exports; bounded candidate analysis.', { path: str }, ['path']),
   tool('storybook_recipe', 'Generate a React default-export CSF story recipe with optional JSON state args and role/name visibility assertions. Read-only; apply via file tools.', { path: str, states: str, role: str, name: str }, ['path']),
+  tool('frontend_states', 'Find bounded loading/error/empty/disabled source markers in one component or template. Read-only heuristic candidates, not runtime verification or a pass/fail audit.', {path:str}, ['path']),
   tool('frontend_architecture', 'Inspect bounded frontend folder roles, client directives and relative import cycle/layer candidates. Heuristic, read-only; verify source before proposing architecture changes.', { path: str }, []),
   tool('ui_component', 'Get a bounded native React/Vue/Angular/Svelte or MUI/Ant Design/Bootstrap component starter, dependencies, setup guidance and existing file candidates. Read-only; then adapt with existing edit/write tools in BUILD.', { library: str, component: str, path: str }, ['library']),
   tool('ui_check', 'Open a user-provided HTTP(S) app URL in isolated Chromium; capture viewport screenshots, overflow and browser errors. Requires shell permission; BUILD only. Artifacts stored locally. Page JavaScript/network requests run.', { url: str, viewport: str, scenario: str, baseline: str, a11y: bool }, ['url']),
@@ -164,6 +166,7 @@ export class WorkspaceTools {
     if (name === 'tailwind_tokens') return inspectTokens(this, input.path, signal);
     if (name === 'frontend_impact') return inspectImpact(this, input.path, signal);
     if (name === 'storybook_recipe') return storyRecipe(this, input, signal);
+    if (name === 'frontend_states') return JSON.stringify(await inspectStates(this, input.path, signal));
     if (name === 'frontend_architecture') return inspectArchitecture(this, input.path, signal);
     if (name === 'ui_component') return inspectComponent(this, input, signal);
     if (name === 'frontend_context') return frontendContext(this, input.path, signal);
