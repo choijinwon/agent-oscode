@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { welcome, chatPrompt, answerHeading, toolStatus, turnFooter } from '../src/terminal-view.js';
+import { welcome, inputFrame, chatPrompt, answerHeading, toolStatus, turnFooter } from '../src/terminal-view.js';
 import { createChatConsole } from '../src/chat-console.js';
 import { setCredential, getCredential, defaultBase } from '../src/credentials.js';
 import { endpoint } from '../src/providers.js';
@@ -47,6 +47,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 설정:
+  --ui-preview                     키 없이 콘솔 UI 예시 화면 확인
   --verbose                        모델 호출·도구 결과 상세 출력
   --copy-last                      저장된 마지막 완료 답변을 클립보드로 복사
   --analysis-notes                  저장된 분석 근거·다음 질문 확인 (API 불필요)
@@ -104,12 +105,20 @@ async function main() {
   const cliArgs = authAction ? raw.slice(2) : raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
     ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['verbose', 'key-stdin', 'copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['ui-preview', 'verbose', 'key-stdin', 'copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (authAction) { await configureAuth(authAction, args); return; }
   if (args['key-stdin']) throw new Error('--key-stdin requires auth set.');
   if (args['ab-live'] && !args['ab-context']) throw new Error('--ab-live requires --ab-context.');
   if (args.help) { print(help); return; }
+  if (args['ui-preview']) {
+    process.stdout.write(welcome({ root: 'my-frontend-app', model: '미리보기', plan: false, connected: false, agent: 'frontend' }));
+    print('  UI 미리보기 — 아래 대화는 예시입니다. API 호출·파일 수정 없음.\n\n  나 › 로그인 폼을 반응형 컴포넌트로 만들어줘');
+    process.stdout.write(answerHeading);
+    print('  기존 컴포넌트와 스타일을 확인한 뒤 구현하겠습니다.\n  모바일 레이아웃과 키보드 접근성도 함께 검토하겠습니다.');
+    process.stdout.write(inputFrame({ plan: false, connected: false }) + chatPrompt + '\n');
+    return;
+  }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
   const maintenance = ['copy-last', 'analysis-notes', 'frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
@@ -299,7 +308,7 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  if (interactive) print(welcome({ root, model: config.model, plan: config.plan, connected: !connectionStatus() }));
+  if (interactive) process.stdout.write(welcome({ root, model: config.model, plan: config.plan, connected: !connectionStatus(), agent: config.agent, budget: config.budget }));
   else print(`oscode 0.9.1 · ${config.provider}/${config.model || '미설정'}`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
@@ -309,6 +318,7 @@ async function main() {
     print('  메시지를 입력하세요. 실행 취소는 Ctrl+C.');
     while (!rl.closed) {
       let input;
+      process.stdout.write(inputFrame({ model: config.model, plan: config.plan, connected: !connectionStatus(), draft: Boolean(pasteDraft.text) }));
       try { input = (await rl.question(chatPrompt)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;

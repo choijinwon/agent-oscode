@@ -53,6 +53,14 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 저장된 답변은 `node bin/oscode.js --copy-last`로 API 호출 없이 복사할 수 있습니다. [운영체제별 지원과 사용법](docs/clipboard.md)
 
+## 콘솔 UI 미리보기
+
+```sh
+node bin/oscode.js --ui-preview
+```
+
+API 키 없이 헤더·대화 예시·입력 영역을 확인합니다. 예시 문구는 실제 AI 응답이 아닙니다. 실제 채팅에서는 터미널 폭에 맞춘 프로젝트 카드와 현재 모드·모델 상태를 표시합니다. `NO_COLOR=1`이면 색상을 끕니다.
+
 ## 콘솔 챗봇
 
 기본 실행은 계속 대화할 수 있는 콘솔 채팅창을 엽니다. 키가 없어도 시작할 수 있습니다. 시작 화면에는 프로젝트·모델 상태와 주요 명령만 표시합니다. 입력은 `›`, 답변은 `OSCODE` 영역에 표시되며 `/status`로 세션·예산을, `/verbose`로 상세 도구 출력을 확인할 수 있습니다.
