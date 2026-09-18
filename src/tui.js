@@ -94,7 +94,7 @@ export class ConsoleUI extends EventEmitter {
     for(const turn of [...(session.archive||[]),...(session.turns||[])]) {
       for(const message of turn.messages||[]) {
         if(!['user','assistant'].includes(message.role)||typeof message.content!=='string'||!message.content.trim())continue;
-        const content=message.role==='user'?message.content.split('\n\n[Selected source excerpts:')[0]:message.content;
+        const content=message.role==='user'?message.content.split('\n\n[Selected source excerpts:')[0].split('\n\n[User-selected project skill:')[0]:message.content;
         this.entries.push({type:message.role,text:safe(content)});
       }
     }
@@ -298,9 +298,9 @@ export class ConsoleUI extends EventEmitter {
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
     if(action==='mode'){this.emit('toggleMode');this.render();return;}
-    if(action==='settings'||action==='preview') {
+    if(action==='settings'||action==='preview'||action==='skills') {
       const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
-      this.finish(action==='preview'?'/preview':'/settings');Object.assign(this,draft);this.render();
+      this.finish(action==='preview'?'/preview':action==='skills'?'/skills':'/settings');Object.assign(this,draft);this.render();
     }
   }
   mouse(sequence) {
@@ -450,7 +450,7 @@ export class ConsoleUI extends EventEmitter {
       // Anchor the newest conversation row above the fixed composer; older rows grow upward.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.project||s.directory?.split('/').filter(Boolean).at(-1)||'workspace'}`)),muted(line(` ${s.model||'모델을 연결하세요'}  ·  ${this.stage}`)),...body.map((t,i)=>{
+    const rows=[accent(line(` OSCODE  /  ${s.project||s.directory?.split('/').filter(Boolean).at(-1)||'workspace'}`)),muted(line(` ${s.model||'모델을 연결하세요'}${s.skill?`  ·  ${safe(s.skill)}`:''}  ·  ${this.stage}`)),...body.map((t,i)=>{
       if(home && t==='무엇을 만들어볼까요?')return accent(line(' '+t));
       const index=i-(bodyHeight-(end-start));
       if(!home && !this.settingsView && index>=0 && index<end-start) {
@@ -526,6 +526,7 @@ export class ConsoleUI extends EventEmitter {
         {action:'preview',label:compact?'[웹]':'[미리보기]',enabled:Boolean(pending)},
         {action:'attach',label:'[첨부]',enabled:Boolean(pending)}
       ] : [
+        {action:'skills',label:s.skill?'[스킬 ✓]':'[스킬]',enabled:Boolean(pending)},
         {action:'mode',label:`[${s.mode==='PLAN'?'계획':'빌드'} ▾]`,enabled:Boolean(pending)},
         {action:'settings',label:compact?'[모델 ▾]':`[${fit(s.model||'모델 연결',20)} ▾]`,enabled:Boolean(pending)}
       ]),...actions];

@@ -323,3 +323,10 @@ test('changed file picker shows recorded changes and preserves input',async t=>{
  assert(ui.menu()[0].includes('+2'));input.write('\r');assert.equal(ui.buffer,'작성 중');assert(ui.lines().some(line=>line.includes('second')));
  assert.equal(ui.overlay,null);input.write('\r');await answer;
 });
+
+test('skill button invokes picker command without discarding draft',async t=>{
+ const {ui,input}=fixture(t);const answer=ui.question(chatPrompt);input.write('반응형으로 수정');
+ const b=ui.buttons.find(b=>b.action==='skills');assert(b);input.write(`\x1b[<0;${b.x};${b.y}M`);
+ assert.equal(await answer,'/skills');assert.equal(ui.buffer,'반응형으로 수정');
+ const choice=ui.choose('스킬 선택',[{label:'layout',value:'layout'}]);input.write('\r');assert.equal(await choice,'layout');assert.equal(ui.buffer,'반응형으로 수정');
+});

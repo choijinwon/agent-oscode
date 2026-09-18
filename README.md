@@ -383,3 +383,24 @@ React·Vue·Angular·Svelte를 감지하고 각 문법에 맞는 네이티브 �
 PLAN·파일 승인·체크포인트는 기존 OSCODE 도구로 처리합니다.
 출력 예산은 이 연결에서 서버의 강제 한도가 아니며, 응답 검증 후 표시합니다.
 [인증 저장 위치·사용량 제한·검증 범위](docs/chatgpt-login.md).
+
+## 프로젝트 스킬 선택
+
+프로젝트의 `.oscode/skills/<이름>/SKILL.md` 또는 `.oscode/skills/<이름>.md`에 Markdown 지침을 저장하세요. `/skills` 또는 입력창의 **스킬** 버튼으로 검색·선택합니다. 방향키로 이동하고 Enter로 확정하며, `돌아가기`는 기존 선택을 유지합니다.
+
+- `/skills list`: 이름·설명·예상 토큰 확인
+- `/skills frontend-review`: 이름으로 선택
+- `/skills off`: 다음 요청부터 스킬 첨부 해제
+
+선택은 현재 에이전트에서 한 개만 유지되며 다른 에이전트·작업 폴더·재실행에는 전달되지 않습니다. 선택한 파일만 매 요청에 다시 읽어 적용합니다. 기존 입력 초안은 선택 중에도 보존됩니다. 스킬은 24 KiB 이하이며 심볼릭 링크는 지원하지 않습니다. 선택한 스킬을 삭제하거나 읽을 수 없으면 요청을 중단하고 알립니다.
+
+스킬 지침도 요청 토큰에 포함되며 기존 예산 검사를 받습니다. 선택 해제는 과거 대화에 포함된 스킬 내용을 지우지 않습니다. 과거 내용까지 제외하려면 `/context history off`를 사용하세요. 스킬은 PLAN 제한·파일 접근·실행 승인 정책을 우회할 수 없습니다. 스크립트나 참고 파일을 자동 실행·첨부하지 않습니다.
+
+[프론트엔드 검토 예제](examples/skills/frontend-review/SKILL.md)를 복사해서 시작할 수 있습니다:
+
+```sh
+mkdir -p .oscode/skills/frontend-review
+cp -n examples/skills/frontend-review/SKILL.md .oscode/skills/frontend-review/SKILL.md
+```
+
+`.oscode`는 기본적으로 Git에서 제외됩니다. 공유할 예제는 `examples/skills`처럼 별도 경로에서 관리하세요.

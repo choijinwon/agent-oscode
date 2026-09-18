@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/skills', '.oscode 프로젝트 스킬 선택'], ['/skills off', '선택한 스킬 해제'],
   ['/preview', '개발 중인 웹 화면 열기'],
   ['/workspace', '작업 폴더 지정·변경'], ['/cwd', '현재 작업 폴더 확인'],
   ['/ocr ', '이미지·PDF 텍스트 추출'],

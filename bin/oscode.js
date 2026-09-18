@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { ProjectSkills } from '../src/skills.js';
 import { changePreview } from '../src/change-preview.js';
 import {AgentTabs} from '../src/agent-tabs.js';
 import {localUrl} from '../src/dev-server.js';
@@ -60,6 +61,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 대화 기능:
   @src/Button.tsx 요청              선택 파일 첨부 (Tab/방향키 자동완성)
+  /skills                          .oscode/skills 스킬 선택 · off 해제
   /context                         파일·대화 컨텍스트 관리
   /diagnose [script]                프로젝트 검사 실행
   /fix                             실패 수정 후 동일 검사 재실행
@@ -283,8 +285,9 @@ async function main(raw = process.argv.slice(2), host) {
   };
   const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const skills = new ProjectSkills(root);
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
-    const uiOptions={ paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
+    const uiOptions={ paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), skill:skills.selected?.title, directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) };
     const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.plan?['--plan']:[])];
     screen=host?host.createUI(uiOptions,childArgs):new ConsoleUI(uiOptions);
@@ -356,7 +359,7 @@ async function main(raw = process.argv.slice(2), host) {
     screen?.clearFailure();
     const originalPrompt = prompt;
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
-    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
+    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = await skills.prepare(prepared.prompt,active.signal); const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
     catch (e) { screen?.showFailure(originalPrompt,pastedPrompt); const restoredQueue=screen?.pauseQueuedPrompt(); if (active.signal.aborted && !restoredQueue) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
@@ -427,6 +430,25 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if (input === '/skills' || input.startsWith('/skills ')) {
+        try {
+          let id=input.slice(7).trim();
+          if(!id||id==='list') {
+            const available=await skills.list();
+            if(!available.length){print('스킬이 없습니다. .oscode/skills/<이름>/SKILL.md 또는 .oscode/skills/<이름>.md 파일을 추가하세요.');continue;}
+            if(id==='list'||!screen){print(available.map(item=>`${item.id}${skills.selected?.relative===item.relative?' ✓':''} · ${item.error||`${item.description||item.title} · 약 ${item.estimatedTokens} 토큰`}`).join('\n')+'\n선택: /skills <이름> · 해제: /skills off');continue;}
+            id=await screen.choose('스킬 선택 · 검색 / ↑↓ / Enter',[
+              {label:'돌아가기 · 현재 선택 유지',value:'cancel'},
+              {label:'스킬 사용 안 함',value:'off'},
+              ...available.map(item=>({label:`${skills.selected?.relative===item.relative?'✓ ':''}${item.id} · ${item.error||`${item.description||item.title} · 약 ${item.estimatedTokens} 토큰`}`,value:item.id}))
+            ]);
+          }
+          if(id==='cancel')continue;
+          await skills.select(id);
+          print(skills.selected?`스킬 선택: ${skills.selected.title} · 다음 요청부터 적용\n.oscode/skills/${skills.selected.relative}`:'스킬 선택을 해제했습니다. 이전 대화에 포함된 지침까지 제외하려면 /context history off를 사용하세요.');
+        }catch(error){print(`스킬 선택 실패: ${error.message}`);}
+        screen?.render();continue;
       }
       if (input === '/context' || input.startsWith('/context ')) {
         try {
