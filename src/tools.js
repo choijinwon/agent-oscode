@@ -1,3 +1,4 @@
+import { changePreview } from './change-preview.js';
 import { saveAnalysisCheckpoint } from './analysis-memory.js';
 import { frontendContext } from './frontend-context.js';
 import { verifyProject } from './verify.js';
@@ -195,7 +196,7 @@ export class WorkspaceTools {
     if (name === 'write_file') {
       const file = await this.resolve(input.path, true);
       if (Buffer.byteLength(input.content) > 512 * 1024) throw new Error('File is too large.');
-      this.onPreview(`Create ${input.path}\n${clip(input.content, 3000)}`);
+      this.onPreview(changePreview(input.path, null, input.content));
       if (!(await this.approve('write', input.path, signal))) throw new Error('File creation denied.');
       if (signal?.aborted) throw new Error('Cancelled.');
       if (this.checkpoints) await this.checkpoints.apply(file, null, input.content);
@@ -209,7 +210,7 @@ export class WorkspaceTools {
       if (!input.old_text || before.split(input.old_text).length !== 2) throw new Error('old_text must match exactly once. Include more surrounding context.');
       const after = before.replace(input.old_text, () => input.new_text);
       if (Buffer.byteLength(after) > 512 * 1024) throw new Error('Resulting file is too large.');
-      this.onPreview(`Edit ${input.path}\n--- before\n${clip(input.old_text, 1500)}\n+++ after\n${clip(input.new_text, 1500)}`);
+      this.onPreview(changePreview(input.path, input.old_text, input.new_text));
       if (!(await this.approve('write', input.path, signal))) throw new Error('Edit denied.');
       if (signal?.aborted) throw new Error('Cancelled.');
       if (hash(await this.text(file)) !== hash(before)) throw new Error('File changed during approval. Read again.');
