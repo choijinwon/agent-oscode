@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/workspace', '작업 폴더 지정·변경'], ['/cwd', '현재 작업 폴더 확인'],
   ['/ocr ', '이미지·PDF 텍스트 추출'],
   ['/settings', '모델 설정 변경'], ['/key', 'API 키 숨김 입력'],
   ['/context', '컨텍스트 파일과 토큰 확인'], ['/context history off', '이전 대화 제외'],

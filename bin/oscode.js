@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {workspacePath} from '../src/workspace-path.js';
 import { settingsUI } from '../src/settings-ui.js';
 import { listModels, chooseModel } from '../src/model-list.js';
 import { SelectedContext } from '../src/selected-context.js';
@@ -109,12 +110,11 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
 
 API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 않습니다.
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
-이미지·PDF: /ocr <파일> · @파일로 질문에 첨부\n복사·붙여넣기: /copy [code] /paste /draft /send /clear
+작업 폴더: /cwd · /workspace <폴더 경로> · /cd <폴더 경로>\n이미지·PDF: /ocr <파일> · @파일로 질문에 첨부\n복사·붙여넣기: /copy [code] /paste /draft /send /clear
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
 명령: /status /verbose [on|off] /settings /key [status|remove] /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
-async function main() {
-  const raw = process.argv.slice(2);
+async function main(raw = process.argv.slice(2)) {
   const authAction = raw[0] === 'auth' ? (raw[1] || 'status') : null;
   const cliArgs = authAction ? raw.slice(2) : raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
@@ -133,7 +133,7 @@ async function main() {
     process.stdout.write(inputFrame({ plan: false, connected: false }) + chatPrompt + '\n');
     return;
   }
-  const root = await fs.realpath(path.resolve(args.cwd || '.'));
+  const root = await workspacePath(args.cwd || '.');
   if (!(await fs.stat(root)).isDirectory()) throw new Error('cwd must be a directory.');
   const maintenance = ['copy-last', 'analysis-notes', 'frontend-context', 'ab-context', 'verify', 'tokens', 'impact', 'story', 'approve-baseline', 'architecture', 'component', 'ui-check', 'inspect-frontend', 'init', 'usage', 'checkpoints', 'config', 'undo', 'show-plan'].filter(key => args[key] !== undefined);
   if (maintenance.length > 1 || (maintenance.length && ((args.prompt && !args['ab-context']) || args.demo || args['apply-plan']))) throw new Error('Choose one maintenance action without --prompt or --demo.');
@@ -277,7 +277,7 @@ async function main() {
   const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
-    screen = new ConsoleUI({ copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
+    screen = new ConsoleUI({ copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) });
     if(readSaved)screen.restoreSession(session);
 
@@ -361,6 +361,21 @@ async function main() {
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
       if (input === '/exit') break;
+      if(input==='/cwd'){print(`작업 폴더: ${root}\n변경: /workspace <폴더 경로> · 파일 첨부: @상대경로`);continue;}
+      if(input==='/workspace'||input.startsWith('/workspace ')||input.startsWith('/cd ')) {
+        try {
+          let target=input.startsWith('/cd ')?input.slice(4).trim():input.slice(10).trim();
+          if(!target)target=await rl.question(`작업 폴더 경로 (현재 ${root}, 빈 입력 취소): `);
+          if(!target.trim())continue;
+          const next=await workspacePath(target,root);
+          if(next===root){print('현재 작업 폴더와 같습니다.');continue;}
+          // Validate the destination before closing the current session. Never carry approvals across projects.
+          resolveConfig(await readProjectConfig(next),{});
+          await saveSession(session);
+          return ['--cwd',next,...(args.simple?['--simple']:[])];
+        }catch(error){print(`폴더 변경 실패: ${error.message}`);}
+        continue;
+      }
       if (input === '/ocr' || input.startsWith('/ocr ')) {
         const raw=input.slice(4).trim();
         if (!raw) { print('사용법: /ocr 파일경로 · /ocr {"path":"문서.pdf","start":1,"pages":3,"language":"kor+eng"}\n이미지·PDF는 @파일로 질문에 첨부할 수도 있습니다. 프로젝트 내부 파일, 최대 20 MiB·5페이지.\n설치 macOS: brew install tesseract tesseract-lang poppler\nUbuntu: sudo apt install tesseract-ocr tesseract-ocr-kor poppler-utils\nWindows: Tesseract와 Poppler를 설치하고 PATH에 추가하세요.'); continue; }
@@ -528,4 +543,5 @@ async function main() {
     }
   } finally { rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
 }
-main().catch(error => { print(`oscode: ${error.message}`); process.exitCode = 1; });
+async function run(){let next=process.argv.slice(2);while(next)next=await main(next);}
+run().catch(error => { print(`oscode: ${error.message}`); process.exitCode = 1; });

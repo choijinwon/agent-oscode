@@ -47,6 +47,16 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 [분석 체크포인트 사용법과 한계](docs/analysis-checkpoints.md)
 
+## 작업 폴더 지정
+
+```bash
+oscode --cwd ~/projects/my-app
+```
+
+콘솔에서는 `/workspace`를 실행해 폴더 경로를 입력하거나 `/workspace ~/projects/my-app`으로 바로 변경합니다. `/cd ../other-app`도 가능합니다. `/cwd`는 전체 작업 경로를 보여줍니다. 공백이 있는 경로도 지원합니다.
+
+폴더를 변경하면 기존 세션을 저장하고 새 프로젝트의 설정·세션으로 시작합니다. 기존 첨부 파일과 승인 상태는 전달하지 않습니다. 이전 폴더의 대화는 `oscode --cwd <이전 경로> --resume latest`로 재개하세요. 파일 첨부는 현재 작업 폴더 기준 `@docs/spec.pdf`처럼 지정합니다.
+
 ## 이미지·PDF OCR
 
 `/ocr screenshots/login.png`로 이미지 글자를 추출하거나, `@docs/spec.pdf 요구사항을 정리해줘`처럼 문서를 질문에 첨부할 수 있습니다. PDF는 텍스트가 없는 페이지를 OCR로 처리합니다. 기본 한국어·영어, 첫 3페이지를 읽으며 범위를 지정할 수 있습니다.

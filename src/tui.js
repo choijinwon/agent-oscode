@@ -385,7 +385,7 @@ export class ConsoleUI extends EventEmitter {
       // Keep messages near the header; reserve the remaining space above the fixed composer.
       while(body.length<bodyHeight)body.push('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
+    const rows=[accent(line(` OSCODE  /  ${s.directory||s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
       if(home && i===1)return accent(line(' '+t));
       const index=i;
       if(!home && !this.settingsView && index<end-start) {
