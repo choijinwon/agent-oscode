@@ -62,3 +62,48 @@ The UI retains up to 250 display entries / about 300k characters in memory; olde
 items may leave the screen buffer while normal session storage remains separate.
 ANSI terminal support is required. Use `--simple` for limited terminals or screen
 readers, and `NO_COLOR=1` to disable colors.
+
+## File references and context selection
+
+Use `@src/Button.vue` in a prompt, or `@"src/my component.vue"` for spaces.
+The full-screen console suggests project file names while typing an `@` reference;
+Tab/up/down selects, Enter inserts, and a second Enter sends. Suggestions refresh
+between turns and inherit the bounded file listing (up to 3,000 files). `--simple`
+accepts references without file completion.
+
+- `/context add src/Button.vue` pins a file for future requests.
+- `/context remove src/Button.vue` removes that future attachment.
+- `/context clear` removes all pinned files.
+- `/context` shows pinned files and estimated source/conversation tokens.
+- `/context history off` excludes past turns, their compacted excerpts and analysis
+  checkpoints from subsequent model requests; `/context history on` restores them.
+
+Each request freshly reads up to eight explicitly selected/referenced files, with
+at most 2,000 characters per file. Truncation is labeled. Imports are not
+implicitly attached; the agent can request dependencies through its existing
+bounded tools. Invalid, secret, binary, oversized or outside-project paths stop
+submission. File excerpts are data, not instructions, and do not count as the
+read evidence needed to edit. The existing request budget includes attachments.
+
+Removing files does not erase previous messages. History exclusion is not a
+file-access restriction: the agent can still read project files using tools.
+The panel estimates omit system instructions, tool definitions and future results;
+they are not a provider bill. Pinned files are local to the active chat process;
+the history toggle is saved with the session. Source excerpts remain in local
+session records like ordinary prompts.
+
+## Diagnose and repair
+
+`/diagnose lint` runs the named package script with normal shell approval and
+writes the existing local verification report. `/diagnose` uses configured
+verification scripts, or detected typecheck/lint scripts. This flow deliberately
+runs scripts only, without starting a browser or development server.
+
+After a script failure, `/fix` sends bounded diagnostics to the configured model,
+asks for a targeted fix through normal approved tools, then reruns the same
+script selection once if the model turn completes. Each execution still requires
+approval unless explicitly enabled with `--allow-shell`. PLAN blocks this flow.
+No key is needed for diagnosis; model-driven repair requires a configured model.
+Blocked, cancelled and timed-out checks are not offered as fixable code errors.
+The new report is the result; model completion alone does not mean the fix passed.
+There is no automatic retry loop or guarantee that the model finds the cause.

@@ -309,3 +309,14 @@ npm run check
 ## 네 프레임워크 지원
 
 React·Vue·Angular·Svelte를 감지하고 각 문법에 맞는 네이티브 스타터 20개를 제공합니다. `--component vue/button`, `angular/card`, `svelte/alert`, `react/pagination`으로 조회하세요. [버전·호환성과 기능별 지원 범위](docs/frameworks.md).
+
+### 파일 선택과 오류 수정
+
+- `@src/Button.vue 버튼 상태를 수정해줘`: 파일 참조, 전체 화면에서 자동완성
+- `/context add src/Button.vue`: 다음 요청에 첨부할 파일 선택
+- `/context`: 선택 파일과 토큰 추정 확인
+- `/context history off`: 다음 요청에서 이전 대화 제외
+- `/diagnose lint`: 승인 후 프로젝트 검사
+- `/fix`: 확인된 실패 수정 후 동일 검사 재실행
+
+[사용법과 범위](docs/console-ui.md). 파일 참조와 진단은 React·Vue·Angular·Svelte 프로젝트에서 사용할 수 있습니다. 실제 검사는 프로젝트 스크립트를 사용합니다.

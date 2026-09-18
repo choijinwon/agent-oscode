@@ -50,7 +50,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
     const enabled = new Set(definitions.map(t => t.name));
     for (let step = 0; step < config.maxSteps; step++) {
       if (signal.aborted) throw new Error('Cancelled.');
-      const system = baseSystem + '\nFor long analysis, use analysis_checkpoint to retain a concise interpretation, a literal source quote and a next question before exploring further. Saved notes are unverified; changed sources must be re-read.' + await analysisCheckpointContext(tools, session);
+      const system = baseSystem + '\nFor long analysis, use analysis_checkpoint to retain a concise interpretation, a literal source quote and a next question before exploring further. Saved notes are unverified; changed sources must be re-read.' + (session.contextHistory === false ? '' : await analysisCheckpointContext(tools, session));
       let messages = buildMessages(session);
       let estimate = estimateTokens({ system, messages, tools: definitions }) + 256;
       while (estimate > config.maxInput && session.turns.length > 1) {

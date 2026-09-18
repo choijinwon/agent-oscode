@@ -1,3 +1,4 @@
+import { fileCompletions } from './selected-context.js';
 import { EventEmitter } from 'node:events';
 import { emitKeypressEvents } from 'node:readline';
 import { stripVTControlCharacters } from 'node:util';
@@ -37,7 +38,7 @@ export function cursorPositions(text, width) {
 export class ConsoleUI extends EventEmitter {
   constructor({ input = process.stdin, output = process.stdout, status = () => ({}) } = {}) {
     super(); this.input = input; this.output = output; this.status = status;
-    this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
+    this.files = []; this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.expanded = false; this.menuIndex = -1; this.closed = false;
     this.stage = '대기'; this.panel = '대화'; this.pasting = false;
     this.oldRaw = Boolean(input.isRaw);
@@ -76,7 +77,11 @@ export class ConsoleUI extends EventEmitter {
   preview(text) { this.panel = text.startsWith('$') ? '실행 검토' : '변경 검토'; this.append(`\n── ${this.panel} (y 적용 / n 취소) ──\n${text}\n`); this.scroll = 0; this.render(); }
   setStage(stage) { this.stage = stage; this.render(); }
   menu() {
-    if (!this.pending || this.pending.hidden || this.pending.label !== chatPrompt || !this.buffer.startsWith('/') || this.buffer.includes('\n')) return [];
+    if (!this.pending || this.pending.hidden || this.pending.label !== chatPrompt) return [];
+    const prefix = chars(this.buffer).slice(0, this.cursor).join('');
+    const references = fileCompletions(prefix, this.files);
+    if (references.length) return references.map(value => value + chars(this.buffer).slice(this.cursor).join(''));
+    if (!this.buffer.startsWith('/') || this.buffer.includes('\n')) return [];
     return [...chatCommands, '/status', '/verbose', '/connect', '/diff'].filter((v,i,a)=>a.indexOf(v)===i && v.startsWith(this.buffer));
   }
   question(label, { signal } = {}) { return this.ask(label, false, signal); }

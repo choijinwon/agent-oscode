@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { SelectedContext } from '../src/selected-context.js';
+import { RepairFlow } from '../src/repair.js';
 import { ConsoleUI } from '../src/tui.js';
 import { welcome, inputFrame, chatPrompt, renderAnswerHeading, toolStatus, turnFooter } from '../src/terminal-view.js';
 import { createChatConsole } from '../src/chat-console.js';
@@ -48,6 +50,12 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --provider compatible --model MODEL
   oscode --prompt '요청' --plan      한 번 실행, 읽기 전용
   oscode --resume latest             마지막 세션 재개
+
+대화 기능:
+  @src/Button.tsx 요청              선택 파일 첨부 (Tab/방향키 자동완성)
+  /context                         파일·대화 컨텍스트 관리
+  /diagnose [script]                프로젝트 검사 실행
+  /fix                             실패 수정 후 동일 검사 재실행
 
 설정:
   --simple                         전체 화면 대신 기본 줄 단위 콘솔
@@ -287,6 +295,8 @@ async function main() {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  const selectedContext = new SelectedContext(tools);
+  const repair = new RepairFlow(tools, config);
   let verbose = Boolean(args.verbose);
   let answerStarted = false;
   const emit = (kind, data) => {
@@ -300,9 +310,9 @@ async function main() {
     if (kind === 'tool' && (!interactive || verbose)) print(`  → ${data.name}${data.input?.path ? ` ${data.input.path}` : ''}`);
     if (kind === 'result') { if (screen) screen.log(toolStatus(data), data.content); else print(interactive && !verbose ? toolStatus(data) : data.content); }
   };
-  const execute = async (prompt, executionPlan = null) => {
+  const execute = async (prompt, executionPlan = null, includeMentions = !executionPlan) => {
     active = new AbortController();
-    try { const provider = readyProvider(); await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
+    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); return await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
     catch (e) { print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
@@ -329,12 +339,43 @@ async function main() {
     print('  Enter 전송 · 실행 중 Ctrl+C 취소');
     while (!rl.closed) {
       let input;
+      if (screen) screen.files = await tools.files().catch(() => []);
       if (!screen) process.stdout.write(inputFrame({ model: config.model, plan: config.plan, connected: !connectionStatus(), draft: Boolean(pasteDraft.text) }));
       try { input = await rl.question(chatPrompt); } catch { break; }
       if (!input.trim()) continue;
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
       if (input === '/exit') break;
+      if (input === '/context' || input.startsWith('/context ')) {
+        try {
+          const command = input.slice(8).trim();
+          if (command.startsWith('add ')) await selectedContext.add(command.slice(4).trim());
+          else if (command.startsWith('remove ')) selectedContext.selected.delete(command.slice(7).trim());
+          else if (command === 'clear') selectedContext.selected.clear();
+          else if (command === 'history off' || command === 'history on') { session.contextHistory = command === 'history on'; await saveSession(session); }
+          else if (command) throw new Error('/context add|remove <path> · clear · history on|off');
+          if (screen) screen.panel = '컨텍스트';
+          print(JSON.stringify(await selectedContext.report(session), null, 2));
+        } catch (error) { print(error.message); }
+        continue;
+      }
+      if (input === '/diagnose' || input.startsWith('/diagnose ') || input === '/fix') {
+        try {
+          let script = input.slice(9).trim();
+          if (input === '/fix') {
+            const prompt = repair.prompt(); script = repair.last.script;
+            const turn = await execute(prompt, null, false);
+            if (turn?.status !== 'done') { print('수정이 완료되지 않아 재검사를 실행하지 않았습니다.'); continue; }
+          }
+          active = new AbortController();
+          if (screen) screen.setStage('검증 중');
+          const report = await repair.diagnose(script, active.signal, print);
+          print(JSON.stringify({ status: report.status, steps: report.steps, report: report.file }, null, 2));
+          if (report.status === 'failed') print('/fix로 수정 후 동일 검사를 한 번 다시 실행할 수 있습니다.');
+        } catch (error) { print(error.message); }
+        finally { active = null; if (screen) { screen.panel = '대화'; screen.setStage('대기'); } }
+        continue;
+      }
       if (input === '/status') {
         print(`${root}\n세션 ${session.id}\n${config.provider} · ${config.model || '모델 미설정'} · ${config.agent} · ${config.plan ? 'PLAN' : 'BUILD'}\n턴 예산 ${config.budget} · 상세 출력 ${verbose ? '켜짐' : '꺼짐'}`); continue;
       }

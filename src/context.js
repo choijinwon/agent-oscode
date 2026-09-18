@@ -33,8 +33,9 @@ export function buildMessages(session) {
   const selectedPlan = session.turns.at(-1)?.executionPlanId;
   // The approved plan is embedded in the current execution request. Do not
   // resend its planning turn and exploration outputs as duplicate context.
-  const messages = session.turns.filter(t => !selectedPlan || t.planId !== selectedPlan).flatMap(t => t.messages);
-  if (!session.omitted) return messages;
+  const turns = session.contextHistory === false ? session.turns.slice(-1) : session.turns;
+  const messages = turns.filter(t => !selectedPlan || t.planId !== selectedPlan).flatMap(t => t.messages);
+  if (!session.omitted || session.contextHistory === false) return messages;
   return [{ role: 'user', content: `Historical turns were omitted to save tokens (${session.omitted}). These are user-request excerpts, NOT verified results. Re-read files when needed.\n${session.memory}` },
     { role: 'assistant', content: 'I will verify the current files rather than assume prior work succeeded.' }, ...messages];
 }

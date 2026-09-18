@@ -45,3 +45,9 @@ test('CJK wrapping and cursor positions use display cells',()=>{
  assert.deepEqual(wrapText('가나다라',4),['가나','다라']);assert.deepEqual(cursorPositions('가나',4).at(-1),{row:1,col:0});
  assert.deepEqual(cursorPositions('가나\n다',4).at(-1),{row:1,col:2});
 });
+test('file references complete inside natural language before submission',async t=>{
+ const {ui,input}=fixture(t);ui.files=['src/Button.vue','src/Card.svelte'];
+ const answer=ui.question(chatPrompt);input.write('수정해줘 @src/B');
+ ui.key('',{name:'tab'});input.write('\r');assert.equal(ui.buffer,'수정해줘 @src/Button.vue');assert(ui.pending);
+ input.write('\r');assert.equal(await answer,'수정해줘 @src/Button.vue');
+});
