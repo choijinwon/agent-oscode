@@ -188,13 +188,26 @@ export class ConsoleUI extends EventEmitter {
     }catch(error){this.hint=`붙여넣기 실패: ${safe(error.message)}`;}
     finally{this.pasteLoading=false;this.render();}
   }
+  queuePrompt() {
+    if(this.pending || !this.buffer.trim())return;
+    if(this.queuedPrompt){this.hint='다음 요청 1개가 대기 중입니다. Esc로 꺼내 수정하세요.';this.render();return;}
+    if(this.buffer.trim().startsWith('/')&&!this.hasPaste){this.hint='명령어는 작업이 끝난 뒤 실행하세요.';this.render();return;}
+    this.queuedPrompt={text:this.buffer,pasted:Boolean(this.hasPaste)};
+    this.buffer='';this.cursor=0;this.hasPaste=false;
+    this.hint='다음 요청 대기 중 · 현재 작업 완료 후 실행 · Esc로 꺼내기';this.render();
+  }
+  pauseQueuedPrompt() {
+    if(!this.queuedPrompt)return false;
+    const queued=this.queuedPrompt;this.queuedPrompt=null;
+    this.recoverPrompt(queued.text,queued.pasted);return true;
+  }
   shortcuts() {
     if (this.completionOpen && this.buffer.startsWith('/')) return ' ↑↓ 명령 선택 · Enter 실행 · Esc 닫기';
     if (this.pending?.choices) return ' 이름 검색 · ↑↓ 선택 · Enter 확정 · Ctrl+C 취소';
     if (this.overlay) return ' ↑↓ 선택 · Enter 입력창에 넣기 · Esc 돌아가기';
     if (this.pending?.hidden) return ' Enter 키 저장 · Ctrl+C 취소 · 입력은 기록하지 않습니다';
     if (this.pending && !this.pending.normal) return /승인/.test(this.pending.label) ? ' y 승인 / n 취소 후 Enter · PgUp/PgDn 검토 · Ctrl+C 중단' : ' Enter 확인 · Ctrl+C 취소';
-    if (!this.pending) return ' Ctrl+C 작업 취소 · 초안 편집 가능 · F2 로그';
+    if (!this.pending) return this.queuedPrompt?' 다음 요청 대기 중 · Esc 꺼내기 · Ctrl+C 작업 취소':this.multiline?' Enter 줄바꿈 · F5 다음 요청 대기 · Ctrl+C 취소':' Enter 다음 요청 대기 · Ctrl+C 취소 · F2 로그';
     return this.multiline ? ' Enter 줄바꿈 · F5 전송 · Tab 모드 전환 · F3 한 줄' : ' Enter 전송 · Ctrl+J 줄바꿈 · Tab 모드 전환 · F3 여러 줄';
   }
   menu() {
@@ -225,7 +238,13 @@ export class ConsoleUI extends EventEmitter {
       const abort = () => this.finish(undefined, new Error('Cancelled.'));
       this.pending = { label: safe(label), hidden, normal, resolve, reject, signal, abort };
       signal?.addEventListener('abort', abort, { once: true });
-      this.menuIndex = -1; this.render();
+      this.menuIndex = -1; this.hint='';
+      if(normal && this.queuedPrompt) {
+        const queued=this.queuedPrompt;this.queuedPrompt=null;
+        const draft={buffer:this.buffer,cursor:this.cursor,hasPaste:this.hasPaste};
+        this.hasPaste=queued.pasted;this.finish(queued.text);Object.assign(this,draft);
+      }
+      this.render();
     });
   }
   finish(value, error) {
@@ -293,7 +312,7 @@ export class ConsoleUI extends EventEmitter {
     if (key.ctrl && key.name === 'c') { if (this.overlay) this.closeOverlay(); else this.emit('SIGINT'); return; }
     if (key.ctrl && ['r','p'].includes(key.name)) { this.openOverlay(key.name === 'r' ? 'history' : 'palette'); return; }
     if (key.name === 'f3' && !this.overlay && (!this.pending || this.pending.normal)) { this.multiline = !this.multiline; this.hint = ''; this.render(); return; }
-    if (key.name === 'f5' && !this.overlay && this.pending?.normal) { this.finish(this.buffer); return; }
+    if (key.name === 'f5' && !this.overlay && (!this.pending || this.pending.normal)) { if(this.pending)this.finish(this.buffer);else this.queuePrompt(); return; }
     if (key.name === 'return' && this.multiline && !this.overlay && (!this.pending || this.pending.normal) && !this.completionOpen) { this.insert('\n'); this.render(); return; }
     if (key.name === 'f4') { this.restorePrompt(); return; }
     if (key.name === 'pageup') { this.scroll = Math.min(this.lines().length, this.scroll + Math.max(1,this.height-8)); this.render(); return; }
@@ -301,6 +320,7 @@ export class ConsoleUI extends EventEmitter {
     if (key.ctrl && key.name === 'home') { this.scroll=this.lines().length; this.render(); return; }
     if (key.ctrl && key.name === 'end') { this.scroll = 0; this.render(); return; }
     if (key.name === 'f2') { this.expanded = !this.expanded;this.scroll=0;this.render();return; }
+    if (key.name === 'escape' && this.queuedPrompt && !this.overlay && !this.pending) {this.pauseQueuedPrompt();return;}
     if (key.name === 'escape') { this.completionOpen = false; if (this.overlay) { this.closeOverlay(); return; } this.menuIndex=-1; this.render();return; }
     this.hint='';
     const menu=this.menu();
@@ -323,7 +343,7 @@ export class ConsoleUI extends EventEmitter {
         else this.render();
         return;
       }
-      if(this.pending) this.finish(this.buffer); else {this.hint='작업 중입니다. 초안을 편집하고 완료 후 전송하세요.';this.render();} return;
+      if(this.pending) this.finish(this.buffer); else this.queuePrompt(); return;
     }
     const previousBuffer = this.buffer;
     const parts = chars(this.buffer);
@@ -435,7 +455,7 @@ export class ConsoleUI extends EventEmitter {
     }
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
-    if(this.communicationTimer && !this.settingsView && !this.overlay) rows.push(accent(line(` ${this.communicationLabel()} · Ctrl+C 취소`)));
+    if(this.communicationTimer && !this.settingsView && !this.overlay) rows.push(accent(line(` ${this.communicationLabel()}${this.queuedPrompt?' · 다음 요청 대기 중':''} · Ctrl+C 취소`)));
     else rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · Ctrl+V 붙여넣기' : ''}`)));
     for(const option of options.slice(0,menuHeight)) {
       const selected=option===menu[this.menuIndex];

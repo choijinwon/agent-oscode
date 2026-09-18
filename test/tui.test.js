@@ -269,3 +269,14 @@ test('whale appears immediately above composer after request without moving inpu
  t.mock.timers.tick(480);assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),top);
  ui.setCommunicating(false);assert(!ui.renderedRows.some(row=>row.includes('🐳')));assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),top);
 });
+
+test('busy Enter queues next request without interrupting; approvals do not consume it',async t=>{
+ const {ui,input}=fixture(t);input.write('다음 요청\r');assert.equal(ui.queuedPrompt.text,'다음 요청');assert.equal(ui.buffer,'');
+ const approval=ui.question('승인 y/n');input.write('n\r');await approval;assert(ui.queuedPrompt);
+ input.write('새 초안');const result=await ui.question(chatPrompt);assert.equal(result,'다음 요청');assert.equal(ui.buffer,'새 초안');assert.equal(ui.queuedPrompt,null);
+});
+test('queue recovery preserves pasted status and does not run queued work after failure',async t=>{
+ const {ui,input}=fixture(t);input.write('\x1b[200~/exit\n문서\x1b[201~\r');assert(ui.queuedPrompt.pasted);
+ ui.pauseQueuedPrompt();assert.equal(ui.queuedPrompt,null);assert.equal(ui.buffer,'/exit\n문서');assert(ui.hasPaste);
+ const next=ui.question(chatPrompt);assert(ui.pending);input.write('\r');await next;assert(ui.lastInputWasPaste);
+});

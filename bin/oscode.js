@@ -345,7 +345,7 @@ async function main(raw = process.argv.slice(2), host) {
     const originalPrompt = prompt;
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
     try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
-    catch (e) { if (active.signal.aborted) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
+    catch (e) { const restoredQueue=screen?.pauseQueuedPrompt(); if (active.signal.aborted && !restoredQueue) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
   const apply = async (confirmed = false) => {
