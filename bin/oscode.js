@@ -277,7 +277,7 @@ async function main() {
   if (interactive && !args.simple && !args.demo && !args.prompt && !args['apply-plan']) {
     screen = new ConsoleUI({ status: () => ({ project: path.basename(root), mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) });
-    screen.append('OSCODE에 오신 것을 환영합니다.\n/settings 모델 설정 · /key 키 입력 · /frontend 프로젝트 분석\n키 없이도 로컬 명령을 사용할 수 있습니다.\n');
+
   }
   const rl = screen || (interactive ? createChatConsole() : null);
   let active;
@@ -338,7 +338,7 @@ async function main() {
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
     if (args.prompt) { await execute(args.prompt); return; }
     if (!rl) throw new Error('비대화형 실행은 --prompt를 지정하세요.');
-    print('  Enter 전송 · 실행 중 Ctrl+C 취소');
+    if (!screen) print('  Enter 전송 · 실행 중 Ctrl+C 취소');
     while (!rl.closed) {
       let input;
       if (screen) screen.files = await tools.files().catch(() => []);

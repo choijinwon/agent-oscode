@@ -107,3 +107,14 @@ test('boxed composer stays within narrow and wide terminals and hides zero usage
   assert.equal(ui.composerWidth,Math.min(width-1,100));
  }
 });
+test('wide landing centers the workspace and cursor, then conversation aligns above composer',async t=>{
+ const {ui,output,text,clear}=fixture(t);output.columns=180;output.rows=48;
+ ui.renderedRows=[];clear();ui.render();
+ assert(text().includes('프론트엔드 작업을 시작하세요'));
+ const cursor=text().match(/\x1b\[(\d+);(\d+)H\x1b\[\?25h$/);assert(cursor);assert(Number(cursor[2])>30);assert(Number(cursor[1])<40);
+ ui.append('짧은 답변');ui.renderedRows=[];clear();ui.render();
+ const rows=text().split(/\x1b\[\d+;1H\x1b\[2K/).slice(1);
+ const message=rows.findIndex(row=>row.includes('짧은 답변'));const box=rows.findIndex(row=>row.includes('╭'));
+ assert(message>=0);assert.equal(box-message,2);assert(!text().includes('프론트엔드 작업을 시작하세요'));
+ output.columns=32;output.rows=12;output.emit('resize');assert.equal(ui.composerWidth,31);
+});

@@ -58,7 +58,7 @@ export class ConsoleUI extends EventEmitter {
   get composerWidth() { return Math.min(this.width, 100); }
   get height() { return Math.max(8, this.output.rows || 24); }
   lines() {
-    return this.entries.flatMap(entry => wrapText(entry.type === 'log' && !this.expanded ? `  ▸ ${entry.title}  [F2 펼치기]` : entry.text, this.width - 2));
+    return this.entries.flatMap(entry => wrapText(entry.type === 'log' && !this.expanded ? `  ▸ ${entry.title}  [F2 펼치기]` : entry.text, this.composerWidth - 2));
   }
   mutate(fn) {
     const before = this.lines().length; fn();
@@ -216,10 +216,14 @@ export class ConsoleUI extends EventEmitter {
   }
   render() {
     if(this.closed)return;
-    const w=this.width,h=this.height,s=this.status(), box=this.composerWidth;
+    const w=this.width,screenHeight=this.height,s=this.status(), box=this.composerWidth;
+    const home=this.entries.length===0;
+    const h=home ? Math.min(screenHeight,20) : screenHeight;
+    const left=Math.floor((w-box)/2);
+    const top=home ? Math.floor((screenHeight-h)/2) : 0;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
     const accent=t=>color?`\x1b[1;36m${t}\x1b[0m`:t;
-    const line=t=>fit(t,w);
+    const line=t=>fit(t,box);
     const muted=t=>color?`\x1b[2m${t}\x1b[0m`:t;
     const pending=this.pending;
     const draft=pending?.hidden ? '•'.repeat(Math.min(chars(this.buffer).length,30)) : this.buffer;
@@ -238,8 +242,27 @@ export class ConsoleUI extends EventEmitter {
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);
     const all=this.lines();this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
-    const body=all.slice(start,end);while(body.length<bodyHeight)body.push('');
-    const rows=[accent(line(` OSCODE │ ${s.project||''} │ ${this.panel}`)),line(` ${s.mode||'BUILD'} · ${s.model||'LOCAL'} · ${this.stage}`),...body.map(t=>line(' '+t))];
+    let body=all.slice(start,end);
+    if(home) {
+      const welcome = [
+        '',
+        '프론트엔드 작업을 시작하세요',
+        'React · Vue · Angular · Svelte',
+        '',
+        '/frontend   프로젝트 살펴보기',
+        '/settings   모델 설정     /key   API 키 입력',
+        '',
+        '예: @src/Button.vue 로딩 상태를 추가해줘',
+        'Ctrl+P 명령 찾기  ·  Ctrl+R 입력 기록',
+        ''
+      ];
+      body=welcome.slice(0,bodyHeight);
+      while(body.length<bodyHeight)body.push('');
+    } else {
+      // Keep short conversations beside the composer instead of far above it.
+      while(body.length<bodyHeight)body.unshift('');
+    }
+    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.stage}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>home && i===1 ? accent(line(' '+t)) : line(' '+t))];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
     rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}`)));
@@ -258,11 +281,11 @@ export class ConsoleUI extends EventEmitter {
     const bottom=fit(positionLabel,box-2);
     rows.push(accent(`╰${'─'.repeat(Math.max(0,box-2-displayWidth(bottom)))}${bottom}╯`));
     rows.push(muted(line(this.hint||this.shortcuts())));
-    const visible=rows.slice(0,h);
+    const visible=Array.from({length:screenHeight},(_,i)=>i>=top && i<top+h ? ' '.repeat(left)+(rows[i-top]||'') : '');
     const rendered=visible.map((r,i)=>r===this.renderedRows[i] ? '' : `\x1b[${i+1};1H\x1b[2K${r}`).join('');
     this.renderedRows=visible;
-    const cursorY=Math.min(h-1,inputTop+2+cursorRow-first);
-    const cursorX=Math.min(w,4+position.col);
+    const cursorY=top+Math.min(h-1,inputTop+2+cursorRow-first);
+    const cursorX=left+Math.min(box,4+position.col);
     this.output.write(`\x1b[?25l\x1b[H${rendered}\x1b[${cursorY};${cursorX}H\x1b[?25h`);
   }
   close() {

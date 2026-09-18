@@ -153,3 +153,9 @@ The composer uses a rounded border capped at 100 terminal cells, with a placehol
 when empty and a visual line counter at the bottom for multiline drafts. Token
 status hides zero-use and zero-draft counters and formats numbers with separators.
 Muted status/help and an accent border distinguish input from conversation.
+
+On an empty session, a compact start panel groups the project, frontend quick
+commands and composer in the center of the terminal. After the first conversation
+entry, the layout uses the available height and keeps recent short conversations
+immediately above the composer. Header, wrapped conversation and input share the
+same centered column (at most 100 cells); narrow terminals use their full width.
