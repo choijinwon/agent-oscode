@@ -55,6 +55,7 @@ export class ConsoleUI extends EventEmitter {
     this.render();
   }
   get width() { return Math.max(10, (this.output.columns || 80) - 1); }
+  get composerWidth() { return Math.min(this.width, 100); }
   get height() { return Math.max(8, this.output.rows || 24); }
   lines() {
     return this.entries.flatMap(entry => wrapText(entry.type === 'log' && !this.expanded ? `  ▸ ${entry.title}  [F2 펼치기]` : entry.text, this.width - 2));
@@ -199,7 +200,7 @@ export class ConsoleUI extends EventEmitter {
     else if (key.ctrl && key.name === 'w') { let start=this.cursor; while(start>0 && /\s/u.test(parts[start-1])) start--; while(start>0 && !/\s/u.test(parts[start-1])) start--; parts.splice(start,this.cursor-start); this.cursor=start; this.buffer=parts.join(''); }
     else if ((key.name==='return' && (key.meta||key.shift)) || key.name==='enter' || (key.ctrl&&key.name==='j')) this.insert('\n');
     else if (key.name==='up' || key.name==='down') {
-      const positions=cursorPositions(this.buffer,this.width-4), current=positions[this.cursor];
+      const positions=cursorPositions(this.buffer,this.composerWidth-4), current=positions[this.cursor];
       const row=current.row+(key.name==='up'?-1:1);
       const candidates=positions.map((p,i)=>({...p,i})).filter(p=>p.row===row);
       if(candidates.length)this.cursor=candidates.reduce((best,p)=>Math.abs(p.col-current.col)<Math.abs(best.col-current.col)?p:best).i;
@@ -215,15 +216,16 @@ export class ConsoleUI extends EventEmitter {
   }
   render() {
     if(this.closed)return;
-    const w=this.width,h=this.height,s=this.status();
+    const w=this.width,h=this.height,s=this.status(), box=this.composerWidth;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
     const accent=t=>color?`\x1b[1;36m${t}\x1b[0m`:t;
     const line=t=>fit(t,w);
+    const muted=t=>color?`\x1b[2m${t}\x1b[0m`:t;
     const pending=this.pending;
     const draft=pending?.hidden ? '•'.repeat(Math.min(chars(this.buffer).length,30)) : this.buffer;
-    const draftLines=wrapText(draft,w-4);
+    const draftLines=wrapText(draft,box-4);
     const prefix=pending?.hidden ? draft : chars(this.buffer).slice(0,this.cursor).join('');
-    const position=cursorPositions(prefix,w-4).at(-1);const cursorRow=position.row;
+    const position=cursorPositions(prefix,box-4).at(-1);const cursorRow=position.row;
     while(draftLines.length<=cursorRow)draftLines.push('');
     const inputHeight=Math.min(8,Math.max(this.overlay || pending && !pending.normal ? 1 : 3,draftLines.length),Math.max(1,h-9));
     this.inputOffset=Math.max(0,Math.min(this.inputOffset,Math.max(0,draftLines.length-inputHeight)));
@@ -232,19 +234,30 @@ export class ConsoleUI extends EventEmitter {
     const first=this.inputOffset;
     const menu=this.overlay || this.completionOpen ? this.menu() : [];const chosen=Math.max(0,this.menuIndex);const options=menu.slice(Math.max(0,chosen-2),Math.max(0,chosen-2)+3);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
-    const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-7));
-    const bodyHeight=Math.max(1,h-inputHeight-menuHeight-5);
+    const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8));
+    const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);
     const all=this.lines();this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
     const body=all.slice(start,end);while(body.length<bodyHeight)body.push('');
     const rows=[accent(line(` OSCODE │ ${s.project||''} │ ${this.panel}`)),line(` ${s.mode||'BUILD'} · ${s.model||'LOCAL'} · ${this.stage}`),...body.map(t=>line(' '+t))];
-    rows.push(line(` ${this.scroll ? '최신 답변 ↓ Ctrl+End · ' : ''}토큰${s.usageEstimated?'(추정 포함)':''} ${s.used||0}/${s.budget||0} · 잔여 ${Math.max(0,(s.budget||0)-(s.used||0))} · 초안 추정 ${s.estimate||0}`));
+    const number = value => Number(value || 0).toLocaleString('en-US');
+    const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
+    rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}`)));
     for(const option of options.slice(0,menuHeight))rows.push(line(`${option===menu[this.menuIndex]?' ›':'  '} ${option}`));
     const inputTop=rows.length;
-    const inputLabel=fit(` ─ ${this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색 (한글 가능)') : pending?.hidden?'키 숨김 입력':pending&&!pending.normal?pending.label:`메시지${this.multiline ? ' · 여러 줄' : ''} · ${cursorRow+1}/${draftLines.length}줄`} `,w);
-    rows.push(accent(inputLabel+'─'.repeat(Math.max(0,w-displayWidth(inputLabel)))));
-    for(let i=0;i<inputHeight;i++)rows.push(line(` ${i===0?'›':'│'} ${draftLines[first+i]||''}`));
-    rows.push(line(this.hint||this.shortcuts()));
+    const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;
+    const label = fit(` ${title} `,box-2);
+    rows.push(accent(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
+    for(let i=0;i<inputHeight;i++) {
+      const placeholder=!draft && i===0 && !pending?.hidden && (!pending || pending.normal) && !this.overlay;
+      const value=placeholder ? '어떤 작업을 할까요?  @파일로 범위를 지정하세요' : draftLines[first+i]||'';
+      const content=fit(value,box-4);
+      rows.push(`${accent('│')}  ${placeholder ? muted(content) : content}${' '.repeat(Math.max(0,box-4-displayWidth(content)))}${accent('│')}`);
+    }
+    const positionLabel=draftLines.length>1 ? ` ${cursorRow+1}/${draftLines.length}줄 ` : '';
+    const bottom=fit(positionLabel,box-2);
+    rows.push(accent(`╰${'─'.repeat(Math.max(0,box-2-displayWidth(bottom)))}${bottom}╯`));
+    rows.push(muted(line(this.hint||this.shortcuts())));
     const visible=rows.slice(0,h);
     const rendered=visible.map((r,i)=>r===this.renderedRows[i] ? '' : `\x1b[${i+1};1H\x1b[2K${r}`).join('');
     this.renderedRows=visible;

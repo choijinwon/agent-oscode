@@ -148,3 +148,8 @@ removes the preceding whitespace-delimited word. Text after the cursor is kept.
 Completion is opened explicitly with Tab; arrows edit the input until then.
 Esc closes completion. Only changed screen rows are repainted to reduce output
 and flicker while editing. Operating-system IME behavior is still terminal-owned.
+
+The composer uses a rounded border capped at 100 terminal cells, with a placeholder
+when empty and a visual line counter at the bottom for multiline drafts. Token
+status hides zero-use and zero-draft counters and formats numbers with separators.
+Muted status/help and an accent border distinguish input from conversation.

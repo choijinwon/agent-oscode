@@ -96,3 +96,14 @@ test('completion does not intercept arrows until Tab; line editing preserves sur
 test('unchanged screen rows are not rewritten on cursor-only movement',t=>{
  const {ui,text,clear}=fixture(t);ui.append('기존 대화');ui.insert('입력');ui.render();clear();ui.key('',{name:'left'});assert(!text().includes('기존 대화'));
 });
+test('boxed composer stays within narrow and wide terminals and hides zero usage clutter',t=>{
+ const {ui,output,text,clear}=fixture(t);
+ for(const width of [24,76,220]) {
+  output.columns=width;ui.renderedRows=[];clear();ui.render();
+  const rows=text().split(/\x1b\[\d+;1H\x1b\[2K/).slice(1);
+  assert.equal(rows.length,output.rows);
+  const top=rows.find(row=>row.includes('╭'));assert(top);assert(top.includes('╮'));
+  assert(!text().includes('잔여'));assert(!text().includes('초안 추정 0'));
+  assert.equal(ui.composerWidth,Math.min(width-1,100));
+ }
+});
