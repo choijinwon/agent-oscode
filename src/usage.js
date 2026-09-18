@@ -37,6 +37,7 @@ export function usageReport(session, detail = false) {
   const totalCost = priced.reduce((sum, r) => sum + r.costUsd, 0);
   const lines = [usageText(session.usage), `설정 단가 기준 예상 비용: ${priced.length ? `$${totalCost.toFixed(6)}` : '미산정'}${unknown || legacy ? ` · 비용 미산정 요청 ${unknown}${legacy ? ` / 이전 형식 턴 ${legacy}` : ''}` : ''}`];
   if (!rows.length) { lines.push('요청별 분석 기록이 없습니다. 새 요청부터 기록됩니다.'); return lines.join('\n'); }
+  lines.push(`코드·파일 읽기 중복 제거: 입력 약 ${rows.reduce((n,r)=>n+(r.optimization?.savedEstimate||0),0)} 토큰 절감 추정 (반복 요청 합계, API 실측 아님)`);
   const byModel = new Map();
   const breakdown = {};
   for (const row of rows) {

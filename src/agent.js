@@ -1,4 +1,5 @@
-import { analysisCheckpointContext, elideDuplicateRead } from './analysis-memory.js';
+import {optimizeRequest} from './request-context.js';
+import { analysisCheckpointContext } from './analysis-memory.js';
 import { summarizeDiagnostics } from './frontend-context.js';
 import { frontendInstructions } from './frontend.js';
 import fs from 'node:fs/promises';
@@ -51,17 +52,18 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
     for (let step = 0; step < config.maxSteps; step++) {
       if (signal.aborted) throw new Error('Cancelled.');
       const system = baseSystem + '\nFor long analysis, use analysis_checkpoint to retain a concise interpretation, a literal source quote and a next question before exploring further. Saved notes are unverified; changed sources must be re-read.' + (session.contextHistory === false ? '' : await analysisCheckpointContext(tools, session));
-      let messages = buildMessages(session);
+      let optimized=optimizeRequest(buildMessages(session));
+      let messages = optimized.messages;
       let estimate = estimateTokens({ system, messages, tools: definitions }) + 256;
       while (estimate > config.maxInput && session.turns.length > 1) {
         compact(session, session.turns.length - 1);
         emit('notice', '오래된 대화 한 턴을 생략했습니다. 원문은 로컬 세션에 보관하고 모델 입력에서 제외합니다.');
-        messages = buildMessages(session);
+        optimized=optimizeRequest(buildMessages(session)); messages = optimized.messages;
         estimate = estimateTokens({ system, messages, tools: definitions }) + 256;
       }
       while (estimate > config.maxInput && trimOldToolResult(turn)) {
         emit('notice', '오래된 도구 출력 일부를 모델 입력에서 제외했습니다.');
-        messages = buildMessages(session);
+        optimized=optimizeRequest(buildMessages(session)); messages = optimized.messages;
         estimate = estimateTokens({ system, messages, tools: definitions }) + 256;
       }
       if (estimate > config.maxInput) throw new Error(`Input estimate ${estimate} exceeds --max-input ${config.maxInput}. Use a smaller task or raise the limit.`);
@@ -70,6 +72,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
       if (maxOutput < 128) throw new Error(`Turn token budget reached (${charged} used/reserved; next input estimate ${estimate}). No further API request made.`);
       emit('request', { step: step + 1, estimate, maxOutput, remaining });
       const record = beginRequest(turn, config, estimate, maxOutput, contextUsage(system, messages, definitions));
+      record.optimization=optimized.stats;
       await save(session);
       let response;
       try { response = await provider.complete({ model: config.model, system, messages, tools: definitions, maxOutput }, signal, chunk => emit('delta', chunk)); }
@@ -108,7 +111,7 @@ export async function runTurn({ session, prompt, config, provider, tools, signal
           ? { content: 'Not executed: cancelled or turn budget exhausted.', is_error: true }
           : await tools.execute(call.name, call.input, signal);
         if (!loopStop) { guard.observe(call, result); loopStop = guard.failureReason(); }
-        elideDuplicateRead(session, turn, call, result);
+        // Original results are retained; request-time deduplication is reversible.
         if (focused && call.name === 'shell' && result.content.length > 2400) {
           (turn.toolArchive ||= []).push({ index: turn.messages.length, message: { role: 'tool', tool_call_id: call.id, ...result } });
           result.content = summarizeDiagnostics(result.content);
