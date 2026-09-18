@@ -28,3 +28,8 @@ test('browser login stages the OpenRouter key and applies it only on confirmatio
  await settingsUI(ui,config,undefined,{readKey:()=>undefined,writeKey:(...args)=>writes.push(args),login:async()=>{assert.equal(writes.length,0);return 'fake-oauth-key';},discover:async draft=>{assert.equal(draft.key,'fake-oauth-key');assert.equal(config.provider,'anthropic');return {models:['test/model']};}});
  assert.equal(config.provider,'compatible');assert.equal(config.baseUrl,'https://openrouter.ai/api/v1');assert.equal(config.model,'test/model');assert.equal(writes[0][2],'fake-oauth-key');
 });
+test('ChatGPT login discovers models and applies provider without storing a raw key',async()=>{
+ const config={provider:'anthropic',model:'old'};const ui=fixture(['chatgpt','test-model','apply']);
+ await settingsUI(ui,config,undefined,{readKey:()=>undefined,writeKey:()=>assert.fail('No key copy'),chatLogin:async()=>({connected:true}),chatModels:async()=>({models:['test-model']})});
+ assert.equal(config.provider,'chatgpt');assert.equal(config.model,'test-model');assert.equal(config.baseUrl,undefined);
+});

@@ -64,5 +64,8 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@openai/codex": "0.155.0"
   }
 }

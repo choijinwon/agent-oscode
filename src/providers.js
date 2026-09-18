@@ -1,3 +1,4 @@
+import { createCodexProvider } from './codex-provider.js';
 import { getCredential } from './credentials.js';
 import { estimateTokens } from './context.js';
 import { collectStream } from './stream.js';
@@ -70,6 +71,7 @@ export function parseResponse(kind, data, request) {
   return { content, calls, truncated, usage };
 }
 export function createProvider(config, fetchImpl = fetch) {
+  if (config.provider === 'chatgpt') return createCodexProvider();
   if (config.provider === 'demo') return demoProvider();
   const kind = config.provider;
   if (!['anthropic', 'compatible'].includes(kind)) throw new Error('Provider must be anthropic, compatible, or demo.');

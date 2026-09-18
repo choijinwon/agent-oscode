@@ -88,7 +88,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   --inspect-frontend                스택·스크립트·파일 진단 (API 불필요)
   --profile economy|balanced        기본: economy
   --model MODEL                     또는 OSCODE_MODEL
-  --provider anthropic|compatible   또는 OSCODE_PROVIDER (기본: anthropic)
+  --provider anthropic|compatible|chatgpt   또는 OSCODE_PROVIDER
   --base-url URL                    또는 OSCODE_BASE_URL; 로컬 모델은 HTTP 허용
   --budget N                        사용자 요청 1개당 누적 토큰 예산
   --max-input N                     요청 입력 추정 한도
@@ -270,7 +270,7 @@ async function main() {
   const connectHelp = () => {
     print('로컬 모드: API 키 없이 /files, /frontend, /help, /paste 등을 사용할 수 있습니다.');
     print('AI 자연어 분석·수정은 모델 연결이 필요합니다. 클립보드나 대화에 API 키를 입력하지 마세요.');
-    print('이 채팅창에서 /settings로 공급자·모델을 선택하고 /key로 키를 숨김 입력하세요.');
+    print('/settings에서 ChatGPT 계정 로그인 또는 공급자·API 키 연결을 선택하세요.');
     print('로컬 모델: --provider compatible --base-url http://localhost:PORT/v1 --model MODEL (호환 서버가 실행 중이어야 합니다).');
     print(connectionStatus() || '모델 설정이 준비되었습니다. 실제 연결은 요청 시 확인합니다.');
   };
@@ -399,6 +399,7 @@ async function main() {
         if (screen) screen.panel = '설정';
         active = new AbortController();
         try {
+          if (!screen && config.provider==='chatgpt') { print('ChatGPT 설정은 --simple 없이 전체 화면의 /settings를 사용하세요.');continue; }
           if (screen) { const applied=await settingsUI(screen,config,active.signal);print(applied ? '설정을 적용했습니다.' : '설정 변경을 취소했습니다.');continue; }
           print('모델 설정 · Enter는 현재 값 유지 · Ctrl+C 취소');
           const provider = (await rl.question(`공급자 [${config.provider}]: `, { signal: active.signal })).trim() || config.provider;
@@ -421,6 +422,7 @@ async function main() {
         continue;
       }
       if (input === '/key' || input === '/key status' || input === '/key remove') {
+        if(config.provider==='chatgpt') {print('ChatGPT 인증은 /settings의 로그인·연결 해제를 사용하세요.');continue;}
         active = new AbortController();
         try {
           if (input === '/key status') print(getCredential(config.provider, config.baseUrl) ? '키 저장됨 (값은 숨김)' : '저장된 키 없음');

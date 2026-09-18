@@ -17,7 +17,7 @@ export function validateProjectConfig(data) {
   if (data.verify !== undefined) validateVerify(data.verify);
   if (data.agent !== undefined && !['general', 'frontend'].includes(data.agent)) throw new Error('agent must be general or frontend.');
   if (data.profile !== undefined && !Object.hasOwn(profiles, data.profile)) throw new Error('profile must be economy or balanced.');
-  if (data.provider !== undefined && !['anthropic', 'compatible'].includes(data.provider)) throw new Error('provider must be anthropic or compatible.');
+  if (data.provider !== undefined && !['anthropic', 'compatible', 'chatgpt'].includes(data.provider)) throw new Error('provider must be anthropic, compatible or chatgpt.');
   for (const key of numbers) if (data[key] !== undefined && (!Number.isSafeInteger(data[key]) || data[key] < (key === 'loopLimit' ? 2 : 1))) throw new Error(`${key} must be a positive integer${key === 'loopLimit' ? ' >= 2' : ''}.`);
   if (data.outputLimit !== undefined && data.outputLimit < 200) throw new Error('outputLimit must be >= 200.');
   for (const key of strings) if (data[key] !== undefined && (typeof data[key] !== 'string' || !data[key].trim())) throw new Error(`${key} must be a nonempty string.`);
