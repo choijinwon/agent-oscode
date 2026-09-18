@@ -8,7 +8,7 @@ export function conversationRows(entries,width,wrap,expanded=false) {
   if(entry.type==='user') {
    const bubble=Math.max(4,Math.min(width-2,Math.floor(width*.78)));
    const lines=wrap(entry.text,bubble-2);const actual=Math.min(bubble,Math.max(...lines.map(displayWidth),2)+2);
-   const margin=' '.repeat(Math.max(0,width-actual));add('');
+   const margin=' '.repeat(Math.max(0,Math.min(12,width-actual)));if(rows.length && rows.at(-1).text)add('');
    for(const line of lines)add(margin+pad(' '+line+' ',actual),'user');
    add('');continue;
   }
@@ -16,7 +16,7 @@ export function conversationRows(entries,width,wrap,expanded=false) {
    for(const text of wrap(entry.type==='log'&&!expanded?`▸ ${entry.title}  [F2 펼치기]`:entry.text,width))add(text,entry.type==='log'?'muted':'text');
    continue;
   }
-  add('');add('OSCODE','label');add('');
+  if(rows.length && rows.at(-1).text)add('');add('OSCODE','label');
   const lines=entry.text.split('\n');let code=false;
   for(let i=0;i<lines.length;i++) {
    const line=lines[i];

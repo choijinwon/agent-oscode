@@ -103,7 +103,7 @@ test('boxed composer stays within narrow and wide terminals and hides zero usage
   assert.equal(rows.length,output.rows);
   const top=rows.find(row=>row.includes('╭'));assert(top);assert(top.includes('╮'));
   assert(!text().includes('잔여'));assert(!text().includes('초안 추정 0'));
-  assert.equal(ui.composerWidth,Math.min(width-1,100));
+  assert.equal(ui.composerWidth,Math.min(width-1,88));
  }
 });
 test('wide landing centers the workspace and cursor, then conversation aligns above composer',async t=>{
@@ -199,4 +199,13 @@ test('attachment button selects a quoted project path; mouse bytes never enter d
 test('toolbar has no actions in secret entry and disables mouse tracking on close',async t=>{
  const {ui,input,text}=fixture(t);const answer=ui.questionHidden('API key');assert.deepEqual(ui.buttons,[]);
  ui.key('',{name:'f10'});assert(ui.pending.hidden);input.write('fake\r');await answer;ui.close();assert(text().includes('\x1b[?1000l\x1b[?1006l'));
+});
+
+test('short chats stay near header on tall terminals and grow without losing controls',t=>{
+ const {ui,output}=fixture(t);output.columns=180;output.rows=80;
+ ui.entries=[{type:'user',text:'하이'},{type:'assistant',text:'안녕하세요!'}];ui.render();
+ const rows=ui.renderedRows;const header=rows.findIndex(r=>r.includes('agent-oscode')||r.includes('workspace'));
+ const user=rows.findIndex(r=>r.includes('하이'));const answer=rows.findIndex(r=>r.includes('안녕하세요!'));const composer=rows.findIndex(r=>r.includes('╭'));
+ assert(user-header<6);assert(answer-user<=4);assert(composer<16);assert(ui.buttons.every(b=>b.y<=18));
+ ui.entries.push({type:'assistant',text:'긴 답변\n'.repeat(100)});ui.render();assert(ui.renderedRows.some(r=>r.includes('╭')));ui.key('',{name:'pageup'});assert(ui.scroll>0);
 });

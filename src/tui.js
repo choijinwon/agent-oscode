@@ -56,7 +56,7 @@ export class ConsoleUI extends EventEmitter {
     this.render();
   }
   get width() { return Math.max(10, (this.output.columns || 80) - 1); }
-  get composerWidth() { return Math.min(this.width, 100); }
+  get composerWidth() { return Math.min(this.width, 88); }
   get height() { return Math.max(8, this.output.rows || 24); }
   lines() {
     return this.transcriptRows().map(row=>row.text);
@@ -320,7 +320,7 @@ export class ConsoleUI extends EventEmitter {
     if(this.closed)return;
     const w=this.width,screenHeight=this.height,s=this.status(), box=this.composerWidth;
     const home=this.entries.length===0 && !this.settingsView;
-    const h=home ? Math.min(screenHeight,20) : screenHeight;
+    let h=home ? Math.min(screenHeight,20) : screenHeight;
     const left=Math.floor((w-box)/2);
     const top=home ? Math.floor((screenHeight-h)/2) : 0;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
@@ -346,6 +346,8 @@ export class ConsoleUI extends EventEmitter {
     const offset=Math.max(0,chosen-count+1);const options=menu.slice(offset,offset+count);
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8-toolbarHeight));
+    // Let short conversations grow downward from the header instead of pinning them to the screen bottom.
+    if(!home && !this.settingsView) h=Math.min(screenHeight,Math.max(14,this.lines().length+inputHeight+menuHeight+6+toolbarHeight));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6-toolbarHeight);
     const styled=this.transcriptRows();const all=styled.map(row=>row.text);this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
