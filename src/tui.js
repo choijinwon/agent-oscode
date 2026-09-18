@@ -1,4 +1,5 @@
-import { searchCommands } from './command-palette.js';
+import {conversationRows,paintConversationRow} from './chat-layout.js';
+import { searchCommands, commandPalette } from './command-palette.js';
 import { fileCompletions } from './selected-context.js';
 import { EventEmitter } from 'node:events';
 import { emitKeypressEvents } from 'node:readline';
@@ -58,7 +59,10 @@ export class ConsoleUI extends EventEmitter {
   get composerWidth() { return Math.min(this.width, 100); }
   get height() { return Math.max(8, this.output.rows || 24); }
   lines() {
-    return this.entries.flatMap(entry => wrapText(entry.type === 'log' && !this.expanded ? `  ▸ ${entry.title}  [F2 펼치기]` : entry.text, this.composerWidth - 2));
+    return this.transcriptRows().map(row=>row.text);
+  }
+  transcriptRows() {
+    return conversationRows(this.entries,this.composerWidth-2,wrapText,this.expanded);
   }
   mutate(fn) {
     const before = this.lines().length; fn();
@@ -71,6 +75,14 @@ export class ConsoleUI extends EventEmitter {
       const last = this.entries.at(-1);
       if (last?.type === 'text' && last.text.length < 50000) last.text += safe(text);
       else this.entries.push({ type: 'text', text: safe(text) });
+      this.bound();
+    });
+  }
+  appendAnswer(text) {
+    this.mutate(() => {
+      const last=this.entries.at(-1);
+      if(last?.type==='assistant')last.text+=safe(text);
+      else this.entries.push({type:'assistant',text:safe(text)});
       this.bound();
     });
   }
@@ -193,7 +205,9 @@ export class ConsoleUI extends EventEmitter {
       while (this.history.length > 100 || this.history.reduce((n, item) => n + item.text.length, 0) > 200000) this.history.shift();
     }
     this.pending = null; this.lastInputWasPaste = pending.normal && Boolean(this.hasPaste); this.hasPaste = false; pending.signal?.removeEventListener('abort', pending.abort);
-    if (!error && !pending.hidden && !this.settingsView && value?.trim()) this.append(`\n나 › ${value}\n`);
+    if (!error && !pending.hidden && !this.settingsView && value?.trim()) {
+      this.mutate(()=>{this.entries.push({type:'user',text:safe(value)});this.bound();});
+    }
     this.buffer = ''; this.cursor = 0; this.menuIndex = -1; this.completionOpen = false;
     if (!pending.normal && this.savedDraft) { Object.assign(this, this.savedDraft); this.savedDraft = null; }
     if (error) pending.reject(error); else pending.resolve(value);
@@ -279,7 +293,9 @@ export class ConsoleUI extends EventEmitter {
     const left=Math.floor((w-box)/2);
     const top=home ? Math.floor((screenHeight-h)/2) : 0;
     const color=!('NO_COLOR' in process.env)&&process.env.TERM!=='dumb';
-    const accent=t=>color?`\x1b[1;36m${t}\x1b[0m`:t;
+    const accent=t=>color?`\x1b[1;37m${t}\x1b[0m`:t;
+    const border=t=>color?`\x1b[90m${t}\x1b[0m`:t;
+    const surface=t=>color?`\x1b[48;5;235m${t}\x1b[0m`:t;
     const line=t=>fit(t,box);
     const muted=t=>color?`\x1b[2m${t}\x1b[0m`:t;
     const pending=this.pending;
@@ -298,7 +314,7 @@ export class ConsoleUI extends EventEmitter {
     if (this.overlay && !options.length) options.push('검색 결과가 없습니다.');
     const menuHeight=Math.min(options.length,Math.max(0,h-inputHeight-8));
     const bodyHeight=Math.max(1,h-inputHeight-menuHeight-6);
-    const all=this.lines();this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
+    const styled=this.transcriptRows();const all=styled.map(row=>row.text);this.scroll=Math.min(this.scroll,Math.max(0,all.length-bodyHeight));
     const end=Math.max(0,all.length-this.scroll), start=Math.max(0,end-bodyHeight);
     let body=all.slice(start,end);
     if(this.settingsView) {
@@ -325,24 +341,34 @@ export class ConsoleUI extends EventEmitter {
       // Keep short conversations beside the composer instead of far above it.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>home && i===1 ? accent(line(' '+t)) : line(' '+t))];
+    const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
+      if(home && i===1)return accent(line(' '+t));
+      const index=i-(bodyHeight-(end-start));
+      if(!home && !this.settingsView && index>=0)return ' '+paintConversationRow(styled[start+index],color);
+      return line(' '+t);
+    })];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
     rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
-    for(const option of options.slice(0,menuHeight))rows.push(line(`${option===menu[this.menuIndex]?' ›':'  '} ${option}`));
+    for(const option of options.slice(0,menuHeight)) {
+      const selected=option===menu[this.menuIndex];
+      const description=!this.overlay&&!pending?.choices ? commandPalette.find(([command])=>command===option)?.[1] : '';
+      const value=line(`${selected?' ›':'  '} ${option}${description?'  '+description:''}`);
+      rows.push(selected?surface(value):muted(value));
+    }
     const inputTop=rows.length;
     const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;
     const label = fit(` ${title} `,box-2);
-    rows.push(accent(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
+    rows.push(border(`╭${label}${'─'.repeat(Math.max(0,box-2-displayWidth(label)))}╮`));
     for(let i=0;i<inputHeight;i++) {
       const placeholder=!draft && i===0 && !pending?.hidden && (!pending || pending.normal) && !this.overlay;
       const value=placeholder ? '어떤 작업을 할까요?  @파일로 범위를 지정하세요' : draftLines[first+i]||'';
       const content=fit(value,box-4);
-      rows.push(`${accent('│')}  ${placeholder ? muted(content) : content}${' '.repeat(Math.max(0,box-4-displayWidth(content)))}${accent('│')}`);
+      rows.push(`${border('│')}${surface('  '+content+' '.repeat(Math.max(0,box-4-displayWidth(content))))}${border('│')}`);
     }
     const positionLabel=draftLines.length>1 ? ` ${cursorRow+1}/${draftLines.length}줄 ` : '';
     const bottom=fit(positionLabel,box-2);
-    rows.push(accent(`╰${'─'.repeat(Math.max(0,box-2-displayWidth(bottom)))}${bottom}╯`));
+    rows.push(border(`╰${'─'.repeat(Math.max(0,box-2-displayWidth(bottom)))}${bottom}╯`));
     rows.push(muted(line(this.hint||this.shortcuts())));
     const visible=Array.from({length:screenHeight},(_,i)=>i>=top && i<top+h ? ' '.repeat(left)+(rows[i-top]||'') : '');
     const rendered=visible.map((r,i)=>r===this.renderedRows[i] ? '' : `\x1b[${i+1};1H\x1b[2K${r}`).join('');

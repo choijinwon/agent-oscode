@@ -310,13 +310,14 @@ async function main() {
   let verbose = Boolean(args.verbose);
   let answerStarted = false;
   const emit = (kind, data) => {
-    if ((kind === 'delta' || kind === 'text') && !answerStarted) { output(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
+    if ((kind === 'delta' || kind === 'text') && !answerStarted) { if(!screen)output(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
     if (kind === 'request') { answerStarted = false; if (screen) { screen.setStage('분석 중'); screen.setCommunicating(true); } else if (interactive && !verbose) print('  · 응답 준비 중…'); }
     if (['tool', 'text', 'stream_end'].includes(kind)) screen?.setCommunicating(false);
     if (kind === 'tool' && screen) screen.setStage(`${['edit_file','write_file'].includes(data.name) ? '수정' : ['shell','ui_check','verify_project'].includes(data.name) ? '검증/실행' : '분석'} · ${data.input?.path || data.name}`);
-    if (kind === 'delta') output(clean(data));
-    if (kind === 'stream_end') print('');
-    if (kind === 'text' || kind === 'notice') print(data);
+    if (kind === 'delta') { if(screen)screen.appendAnswer(clean(data));else output(clean(data)); }
+    if (kind === 'stream_end') { if(screen)screen.appendAnswer('\n');else print(''); }
+    if (kind === 'text') { if(screen)screen.appendAnswer(clean(data)+'\n');else print(data); }
+    if (kind === 'notice') print(data);
     if (kind === 'request' && (!interactive || verbose)) print(`  ↗ ${config.model} · 입력 추정 ${data.estimate} · 출력 한도 ${data.maxOutput} · ${data.step}/${config.maxSteps}`);
     if (kind === 'tool' && (!interactive || verbose)) print(`  → ${data.name}${data.input?.path ? ` ${data.input.path}` : ''}`);
     if (kind === 'result') { if (screen) screen.log(toolStatus(data), data.content); else print(interactive && !verbose ? toolStatus(data) : data.content); }
