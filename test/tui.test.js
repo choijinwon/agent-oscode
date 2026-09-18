@@ -258,3 +258,14 @@ test('new messages push older messages upward while composer stays fixed',t=>{
  assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),composer);
  assert.equal(composer-ui.renderedRows.findIndex(row=>row.includes('두 번째 답변')),2);
 });
+
+test('whale appears immediately above composer after request without moving input or appearing in header',t=>{
+ t.mock.timers.enable({apis:['setInterval']});const {ui}=fixture(t);ui.append('보낸 요청');
+ const top=ui.renderedRows.findIndex(row=>row.includes('╭'));
+ assert(!ui.renderedRows.some(row=>row.includes('🐳')));
+ ui.setCommunicating(true);
+ assert(!ui.renderedRows.slice(0,2).some(row=>row.includes('🐳')));
+ assert(ui.renderedRows[top-1].includes('데이터 통신 중'));assert(ui.renderedRows[top-1].includes('🐳'));
+ t.mock.timers.tick(480);assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),top);
+ ui.setCommunicating(false);assert(!ui.renderedRows.some(row=>row.includes('🐳')));assert.equal(ui.renderedRows.findIndex(row=>row.includes('╭')),top);
+});

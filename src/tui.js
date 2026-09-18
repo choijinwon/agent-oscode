@@ -411,7 +411,7 @@ export class ConsoleUI extends EventEmitter {
       // Anchor the newest conversation row above the fixed composer; older rows grow upward.
       while(body.length<bodyHeight)body.unshift('');
     }
-    const rows=[accent(line(` OSCODE  /  ${s.directory||s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.communicationLabel()}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
+    const rows=[accent(line(` OSCODE  /  ${s.directory||s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.stage}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>{
       if(home && i===1)return accent(line(' '+t));
       const index=i-(bodyHeight-(end-start));
       if(!home && !this.settingsView && index>=0 && index<end-start) {
@@ -435,7 +435,8 @@ export class ConsoleUI extends EventEmitter {
     }
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
-    rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · Ctrl+V 붙여넣기' : ''}`)));
+    if(this.communicationTimer && !this.settingsView && !this.overlay) rows.push(accent(line(` ${this.communicationLabel()} · Ctrl+C 취소`)));
+    else rows.push(muted(line(` ${all.length>bodyHeight ? `${start+1}–${end}/${all.length} · 휠/PgUp · ${this.scroll?'최신 Ctrl+End':'처음 Ctrl+Home'} · ` : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · Ctrl+V 붙여넣기' : ''}`)));
     for(const option of options.slice(0,menuHeight)) {
       const selected=option===menu[this.menuIndex];
       const description=!this.overlay&&!pending?.choices ? commandPalette.find(([command])=>command===option)?.[1] : '';
