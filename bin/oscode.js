@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import {openWebPreview} from '../src/web-preview.js';
+import {localUrl} from '../src/dev-server.js';
+import {AutoWebPreview,openWebPreview} from '../src/web-preview.js';
 import {workspacePath} from '../src/workspace-path.js';
 import { settingsUI } from '../src/settings-ui.js';
 import { listModels, chooseModel } from '../src/model-list.js';
@@ -311,6 +312,8 @@ async function main(raw = process.argv.slice(2)) {
   const repair = new RepairFlow(tools, config);
   let verbose = Boolean(args.verbose);
   let answerStarted = false;
+  const autoPreview=new AutoWebPreview({onOpen:url=>print(`자동 미리보기: ${url}`)});
+  const showPreview=url=>{if(interactive&&!config.plan)void autoPreview.show(url);};
   const emit = (kind, data) => {
     if ((kind === 'delta' || kind === 'text') && !answerStarted) { if(!screen)output(interactive ? renderAnswerHeading() : '\noscode › '); answerStarted = true; }
     if (kind === 'request') { answerStarted = false; if (screen) { screen.setStage('분석 중'); screen.setCommunicating(true); } else if (interactive && !verbose) print('  · 응답 준비 중…'); }
@@ -322,13 +325,14 @@ async function main(raw = process.argv.slice(2)) {
     if (kind === 'notice') print(data);
     if (kind === 'request' && (!interactive || verbose)) print(`  ↗ ${config.model} · 입력 추정 ${data.estimate} · 출력 한도 ${data.maxOutput} · ${data.step}/${config.maxSteps}`);
     if (kind === 'tool' && (!interactive || verbose)) print(`  → ${data.name}${data.input?.path ? ` ${data.input.path}` : ''}`);
+    if (kind === 'result' && data.name==='shell' && !data.is_error) showPreview(localUrl(data.content||''));
     if (kind === 'result') { if (screen) screen.log(toolStatus(data), data.content); else print(interactive && !verbose ? toolStatus(data) : data.content); }
   };
   const execute = async (prompt, executionPlan = null, includeMentions = !executionPlan) => {
     active = new AbortController();
     const originalPrompt = prompt;
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
-    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); return await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
+    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = prepared.prompt; const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
     catch (e) { if (active.signal.aborted) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
@@ -347,6 +351,7 @@ async function main(raw = process.argv.slice(2)) {
   };
   if (interactive && !screen) process.stdout.write(welcome({ root, model: config.model, plan: config.plan, connected: !connectionStatus(), agent: config.agent, budget: config.budget }));
   else if (!screen) print(`oscode 0.9.1 · ${config.provider}/${config.model || '미설정'}`);
+  showPreview(config.verify?.url);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
@@ -368,6 +373,7 @@ async function main(raw = process.argv.slice(2)) {
           if(!url)url=await rl.question('개발 서버 주소 (예: http://localhost:3000, 빈 입력 취소): ');
           if(!url.trim())continue;
           const opened=await openWebPreview(url.trim());
+          autoPreview.opened.add(opened);
           print(`브라우저 미리보기: ${opened}\n연결되지 않으면 해당 프로젝트의 개발 서버를 먼저 실행하세요.`);
         }catch(error){print(`미리보기 실패: ${error.message}`);}
         continue;
@@ -552,7 +558,7 @@ async function main(raw = process.argv.slice(2)) {
       if (connectionStatus()) { print('\n  OSCODE\n\n  아직 모델이 연결되지 않았습니다. /settings → /key 순서로 설정하세요.\n  로컬 탐색은 /files 또는 /frontend로 바로 사용할 수 있습니다.'); continue; }
       await execute(input);
     }
-  } finally { rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
+  } finally { autoPreview.close(); rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
 }
 async function run(){let next=process.argv.slice(2);while(next)next=await main(next);}
 run().catch(error => { print(`oscode: ${error.message}`); process.exitCode = 1; });
