@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {repositoryMap} from '../src/repository-map.js';
 import {ApprovalMode} from '../src/approval-mode.js';
 import {readAppearance,saveAppearance,appearanceUI} from '../src/appearance.js';
 import { ProjectSkills } from '../src/skills.js';
@@ -434,6 +435,12 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if(input==='/map'||input.startsWith('/map ')){
+        active=new AbortController();screen?.setStage('코드 지도 생성 중');
+        try{print(await repositoryMap(tools,input.slice(4).trim(),1600,active.signal));}
+        catch(error){print(`코드 지도: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
       }
       if(input==='/approval'||input.startsWith('/approval ')){
         active=new AbortController();
