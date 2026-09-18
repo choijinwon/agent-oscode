@@ -37,8 +37,8 @@ export function cursorPositions(text, width) {
 }
 
 export class ConsoleUI extends EventEmitter {
-  constructor({ input = process.stdin, output = process.stdout, status = () => ({}) } = {}) {
-    super(); this.input = input; this.output = output; this.status = status;
+  constructor({ input = process.stdin, output = process.stdout, status = () => ({}), copy } = {}) {
+    super(); this.input = input; this.output = output; this.status = status; this.copy = copy;
     this.history = []; this.overlay = null; this.recovery = null;
     this.files = []; this.entries = []; this.buffer = ''; this.cursor = 0; this.scroll = 0;
     this.multiline = false; this.completionOpen = false; this.inputOffset = 0; this.renderedRows = [];
@@ -113,6 +113,19 @@ export class ConsoleUI extends EventEmitter {
     this.cursor = chars(this.buffer).length; this.recovery = null;
     this.hint = '취소한 요청을 복구했습니다. 수정 후 Enter로 다시 전송하세요.'; this.render();
   }
+  async copyContent(kind) {
+    if (this.overlay || this.settingsView || (this.pending && !this.pending.normal)) return;
+    if (this.copying) return;
+    this.copying = true;
+    this.hint = '클립보드에 복사 중…'; this.render();
+    try {
+      if (!this.copy) throw new Error('복사 기능을 사용할 수 없습니다.');
+      if (kind === 'draft' && !this.buffer.trim()) throw new Error('작성 중인 입력이 없습니다.');
+      await this.copy(kind, kind === 'draft' ? this.buffer : undefined);
+      this.hint = `${kind === 'draft' ? '입력 내용' : kind === 'code' ? '코드 블록' : '마지막 완료 답변'}을 복사했습니다.`;
+    } catch (error) { this.hint = `복사 실패: ${safe(error.message)}`; }
+    finally { this.copying = false; this.render(); }
+  }
   shortcuts() {
     if (this.pending?.choices) return ' 이름 검색 · ↑↓ 선택 · Enter 확정 · Ctrl+C 취소';
     if (this.overlay) return ' ↑↓ 선택 · Enter 입력창에 넣기 · Esc 돌아가기';
@@ -175,6 +188,7 @@ export class ConsoleUI extends EventEmitter {
     if (key.name === 'paste-start') { this.pasting = true; this.hasPaste = true; this.pasteText = ''; return; }
     if (key.name === 'paste-end') { this.pasting = false; this.insert(safe(this.pasteText)); this.pasteText = ''; this.render(); return; }
     if (this.pasting) { if (text && this.pasteText.length <= 65536) this.pasteText += text.replace(/\r/g,'\n'); return; }
+    if (['f6','f7','f8'].includes(key.name)) { return this.copyContent({f6:'answer',f7:'code',f8:'draft'}[key.name]); }
     if (key.ctrl && key.name === 'c') { if (this.overlay) this.closeOverlay(); else this.emit('SIGINT'); return; }
     if (key.ctrl && ['r','p'].includes(key.name)) { this.openOverlay(key.name === 'r' ? 'history' : 'palette'); return; }
     if (key.name === 'f3' && !this.overlay && (!this.pending || this.pending.normal)) { this.multiline = !this.multiline; this.hint = ''; this.render(); return; }
@@ -285,7 +299,7 @@ export class ConsoleUI extends EventEmitter {
     const rows=[accent(line(` OSCODE  /  ${s.project||'workspace'}`)),muted(line(` ${s.mode||'BUILD'}  ·  ${s.model||'LOCAL'}  ·  ${this.stage}${home ? '' : `  /  ${this.panel}`}`)),...body.map((t,i)=>home && i===1 ? accent(line(' '+t)) : line(' '+t))];
     const number = value => Number(value || 0).toLocaleString('en-US');
     const usage = s.used ? `사용 ${number(s.used)} / ${number(s.budget)} 토큰${s.usageEstimated ? ' (추정 포함)' : ''}` : `예산 ${number(s.budget)} 토큰`;
-    rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}`)));
+    rows.push(muted(line(` ${this.scroll ? '↓ 최신 답변 Ctrl+End · ' : ''}${usage}${s.estimate ? ` · 입력 약 ${number(s.estimate)}` : ''}${!this.settingsView && (!pending || pending.normal) && !this.overlay ? ' · F6 답변 복사 · F7 코드 · F8 입력' : ''}`)));
     for(const option of options.slice(0,menuHeight))rows.push(line(`${option===menu[this.menuIndex]?' ›':'  '} ${option}`));
     const inputTop=rows.length;
     const title = this.overlay ? (this.overlay.kind === 'history' ? '입력 기록 검색' : '명령 검색') : pending?.hidden ? 'API 키 · 숨김 입력' : pending && !pending.normal ? pending.label : `요청 입력 · ${this.multiline ? '여러 줄' : 'Enter 전송'}`;

@@ -51,6 +51,8 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 대화 중 `/paste`로 클립보드의 여러 줄 코드·로그를 초안에 담고, `/draft`로 확인한 뒤 `/send`로 한 번에 전송합니다. `/clear`로 취소할 수 있습니다. `/copy`는 마지막 완료 답변을, `/copy code`는 코드 블록만 복사합니다.
 
+전체 화면에서는 **F6**로 마지막 완료 답변, **F7**로 코드 블록, **F8**로 작성 중인 입력을 즉시 복사합니다. 입력 내용과 커서 위치는 유지됩니다. Mac에서 기능 키가 시스템 동작에 연결되어 있으면 **Fn+F6/F7/F8**을 사용하세요.
+
 저장된 답변은 `node bin/oscode.js --copy-last`로 API 호출 없이 복사할 수 있습니다. [운영체제별 지원과 사용법](docs/clipboard.md)
 
 ## 콘솔 UI 미리보기

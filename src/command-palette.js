@@ -6,7 +6,7 @@ export const commandPalette = [
   ['/plan', '계획 모드 켜기'], ['/plan off', '구현 모드 전환'],
   ['/plan show', '저장된 계획 보기'], ['/apply', '계획 적용'],
   ['/diff', '코드 변경 비교'], ['/usage', '토큰 사용량 보기'],
-  ['/copy', '마지막 답변 복사'], ['/help', '도움말'], ['/exit', '종료']
+  ['/copy', '마지막 답변 복사 · F6'], ['/copy code', '코드 블록만 복사 · F7'], ['/help', '도움말'], ['/exit', '종료']
 ];
 export function searchCommands(query) {
   const words = query.trim().toLowerCase().split(/\s+/);

@@ -132,3 +132,23 @@ test('Tab requests mode toggle only in ordinary idle chat and preserves the draf
  const setting=ui.questionHidden('키');ui.key('',{name:'tab'});assert.equal(toggles,1);input.write('fake\r');await setting;
  const next=ui.question(chatPrompt);input.write('/set');ui.key('',{name:'tab'});assert.equal(toggles,1);assert(ui.completionOpen);input.write('\r\r');assert.equal(await next,'/settings');
 });
+
+test('copy shortcuts preserve multiline drafts and cursor without submitting',async t=>{
+ const {ui,input}=fixture(t);const copied=[];ui.copy=async(...args)=>copied.push(args);
+ const answer=ui.question(chatPrompt);input.write('첫 줄');ui.key('',{ctrl:true,name:'j'});input.write('둘째 줄');ui.key('',{name:'left'});
+ const draft=ui.buffer,cursor=ui.cursor;
+ for(const name of ['f6','f7','f8'])await ui.key('',{name});
+ assert.deepEqual(copied,[['answer',undefined],['code',undefined],['draft',draft]]);
+ assert.equal(ui.buffer,draft);assert.equal(ui.cursor,cursor);assert(ui.pending);assert.match(ui.hint,/복사했습니다/);
+ input.write('\r');assert.equal(await answer,draft);
+});
+test('copy is blocked for secrets and overlays; failures and duplicate requests are handled',async t=>{
+ const {ui,input}=fixture(t);let count=0;ui.copy=async()=>{count++;};
+ const secret=ui.questionHidden('API key');input.write('private');await ui.key('',{name:'f8'});assert.equal(count,0);input.write('\r');await secret;
+ const answer=ui.question(chatPrompt);ui.openOverlay('palette');await ui.key('',{name:'f6'});assert.equal(count,0);ui.closeOverlay();
+ await ui.key('',{name:'f8'});assert.match(ui.hint,/입력이 없습니다/);
+ ui.copy=async()=>{throw new Error('clipboard unavailable');};await ui.key('',{name:'f6'});assert.match(ui.hint,/복사 실패.*clipboard unavailable/);
+ let finish;ui.copy=()=>{count++;return new Promise(resolve=>{finish=resolve;});};
+ const pending=ui.key('',{name:'f6'});await ui.key('',{name:'f7'});assert.equal(count,1);finish();await pending;
+ input.write('\r');await answer;
+});
