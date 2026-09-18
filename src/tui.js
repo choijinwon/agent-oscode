@@ -274,6 +274,8 @@ export class ConsoleUI extends EventEmitter {
     if(action==='copy')return this.copyContent('answer');
     if(action==='paste')return this.pasteContent();
     if(action==='stop'){if(!this.pending)this.emit('SIGINT');return;}
+    if(action==='queue')return this.queuePrompt();
+    if(action==='unqueue'&&!this.pending)return this.pauseQueuedPrompt();
     if(!this.pending?.normal)return;
     if(action==='send'){if(this.buffer.trim())this.finish(this.buffer);return;}
     if(action==='attach'){this.openOverlay('files');return;}
@@ -476,22 +478,34 @@ export class ConsoleUI extends EventEmitter {
     this.buttons=[];
     if(toolbar) {
       const compact=box<65;
+      const primary=pending
+        ? {action:'send',label:'[↑ 전송]',enabled:Boolean(this.buffer.trim()),primary:true}
+        : this.queuedPrompt
+          ? {action:'unqueue',label:box<40?'[↶ 수정]':'[↶ 대기 수정]',enabled:true,primary:true}
+          : {action:'queue',label:box<40?'[↓ 대기]':'[↓ 다음 요청]',enabled:Boolean(this.buffer.trim()),primary:true};
+      const actions=[...(!pending?[{action:'stop',label:'[■ 중단]',enabled:true}]:[]),primary];
       const items=[...(this.tabs?[{action:'newAgent',label:'[+]',enabled:true}]:[]),{action:'paste',label:'[붙여넣기]',enabled:!this.pasteLoading},
         {action:'copy',label:'[복사]',enabled:!this.copying},
         {action:'preview',label:compact?'[웹]':'[미리보기]',enabled:Boolean(pending)},
         {action:'attach',label:compact?'[+]':'[+ 첨부]',enabled:Boolean(pending)},
         {action:'mode',label:`[${s.mode||'BUILD'}]`,enabled:Boolean(pending)},
-        {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},
-        {action:pending?'send':'stop',label:pending?'[↑ 전송]':'[■ 중단]',enabled:!pending||Boolean(this.buffer.trim())}];
+        {action:'settings',label:compact?'[모델]':`[${fit(s.model||'모델 설정',20)} ▾]`,enabled:Boolean(pending)},...actions];
+      const chip=item=>{
+        if(!color)return item.label;
+        const style=!item.enabled?'38;5;242;48;5;235':item.primary?'1;38;5;232;48;5;153':'38;5;252;48;5;238';
+        return `\x1b[${style}m ${item.label.slice(1,-1)} \x1b[0m`;
+      };
       let used=0;const segments=[];
-      for(const item of (box<40?items.filter(item=>['paste','send','stop'].includes(item.action)):items)) {
+      const visibleItems=box<40?items.filter(item=>item.action==='paste'||actions.includes(item)):items;
+      for(const item of visibleItems) {
         const width=displayWidth(item.label);
-        const reserve=item===items.at(-1)?0:displayWidth(items.at(-1).label)+1;
+        const remaining=actions.slice(actions.includes(item)?actions.indexOf(item)+1:0);
+        const reserve=remaining.reduce((n,action)=>n+displayWidth(action.label)+1,0);
         if(used+width+reserve>box-4)continue;
-        const gap=item===items.at(-1)?Math.max(0,box-4-used-width):0;
+        const gap=item===actions[0]?Math.max(0,box-4-used-width-reserve):0;
         segments.push(' '.repeat(gap));used+=gap;
         if(item.enabled)this.buttons.push({action:item.action,x:left+4+used,y:top+rows.length+1,width});
-        segments.push(item.enabled?accent(item.label):muted(item.label));used+=width;
+        segments.push(chip(item));used+=width;
         if(used<box-4){segments.push(' ');used++;}
       }
       rows.push(border('│')+'  '+segments.join('')+' '.repeat(Math.max(0,box-4-used))+border('│'));

@@ -280,3 +280,16 @@ test('queue recovery preserves pasted status and does not run queued work after 
  ui.pauseQueuedPrompt();assert.equal(ui.queuedPrompt,null);assert.equal(ui.buffer,'/exit\n문서');assert(ui.hasPaste);
  const next=ui.question(chatPrompt);assert(ui.pending);input.write('\r');await next;assert(ui.lastInputWasPaste);
 });
+
+test('composer buttons queue and retrieve a request by mouse without cancelling active work',async t=>{
+ const {ui,input,output}=fixture(t);let cancelled=0;ui.on('SIGINT',()=>cancelled++);
+ const click=action=>{const b=ui.buttons.find(b=>b.action===action);assert(b,action);input.write(`\x1b[<0;${b.x};${b.y}M`);input.write(`\x1b[<0;${b.x};${b.y}m`);};
+ input.write('다음 작업');click('queue');assert.equal(ui.queuedPrompt.text,'다음 작업');assert.equal(cancelled,0);
+ click('unqueue');assert.equal(ui.buffer,'다음 작업');assert.equal(ui.queuedPrompt,null);
+ for(const columns of [29,30,40,60,100]){
+  output.columns=columns;output.emit('resize');
+  assert(ui.buttons.some(b=>b.action==='queue'));assert(ui.buttons.some(b=>b.action==='stop'));
+  assert(ui.buttons.every(b=>b.x+b.width-1<=columns));
+ }
+ click('queue');const result=await ui.question(chatPrompt);assert.equal(result,'다음 작업');assert.equal(cancelled,0);
+});
