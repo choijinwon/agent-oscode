@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/states run ', '브라우저에서 시나리오 실행·실제 UI 상태 검증'],
   ['/states ', '컴포넌트 로딩·오류·빈 결과·비활성 상태 점검'],
   ['/architecture', '프론트엔드 폴더 역할·의존 관계·순환 참조 분석'],
   ['/review', '변경 파일·프로젝트 검사·반응형·접근성 검증'], ['/review show', '마지막 검증 결과 보기'],

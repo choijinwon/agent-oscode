@@ -5,15 +5,16 @@ import { sessionDirectory } from './session.js';
 
 export function validateScenario(data) {
   if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => k !== 'steps') || !Array.isArray(data.steps) || !data.steps.length || data.steps.length > 20) throw new Error('Scenario requires 1–20 steps.');
-  const actions = { click: [], fill: ['value'], press: ['key'], visible: [], text: ['value'] };
+  const actions = { click: [], fill: ['value'], press: ['key'], visible: [], hidden: [], disabled: [], enabled: [], count: ['value'], text: ['value'] };
   for (const step of data.steps) {
-    if (!step || !Object.hasOwn(actions, step.action)) throw new Error('Actions: click, fill, press, visible, text.');
+    if (!step || !Object.hasOwn(actions, step.action)) throw new Error('Actions: click, fill, press, visible, hidden, disabled, enabled, count, text.');
     const keys = ['action', 'selector', ...actions[step.action]];
-    if (Object.keys(step).some(k => !keys.includes(k)) || keys.some(k => typeof step[k] !== 'string' || step[k].length > 2000) || !step.selector.trim()) throw new Error('Invalid scenario step. Use a selector and required value/key.');
+    if (Object.keys(step).some(k => !keys.includes(k)) || keys.some(k => (step.action === 'count' && k === 'value' ? !Number.isInteger(step[k]) || step[k] < 0 || step[k] > 5000 : typeof step[k] !== 'string' || step[k].length > 2000)) || !step.selector.trim()) throw new Error('Invalid scenario step. Use a selector and required value/key.');
   }
   return data;
 }
 export async function runScenario(page, scenario) {
+  validateScenario(scenario);
   const results = [];
   for (const [index, step] of scenario.steps.entries()) {
     const item = { step: index + 1, action: step.action, selector: step.selector, passed: false };
@@ -22,6 +23,18 @@ export async function runScenario(page, scenario) {
       if (step.action === 'click') await locator.click({ timeout: 5000 });
       if (step.action === 'fill') await locator.fill(step.value, { timeout: 5000 });
       if (step.action === 'press') await locator.press(step.key, { timeout: 5000 });
+      if (step.action === 'hidden') await locator.waitFor({ state: 'hidden', timeout: 5000 });
+      if (['disabled', 'enabled', 'count'].includes(step.action)) {
+        const until = Date.now() + 5000;
+        while (true) {
+          const matches = await locator.count();
+          const passed = step.action === 'count' ? matches === step.value : matches === 1 && await locator.isVisible() &&
+            (step.action === 'disabled' ? await locator.isDisabled({timeout:1000}) : await locator.isEnabled({timeout:1000}));
+          if (passed) break;
+          if (Date.now() >= until) throw new Error('Expected state did not appear.');
+          await page.waitForTimeout(100);
+        }
+      }
       if (step.action === 'visible' || step.action === 'text') {
         await locator.waitFor({ state: 'visible', timeout: 5000 });
         if (step.action === 'text') {
@@ -38,7 +51,7 @@ export async function runScenario(page, scenario) {
     results.push(item);
     if (!item.passed) break;
   }
-  return { passed: results.length === scenario.steps.length && results.every(r => r.passed), steps: results };
+  return { assertions: results.filter(r => ['visible','hidden','disabled','enabled','count','text'].includes(r.action) && r.passed).length, plannedSteps: scenario.steps.length, passed: results.length === scenario.steps.length && results.every(r => r.passed), steps: results };
 }
 export const captureKey = (url, scenario) => createHash('sha256').update(JSON.stringify({ url, scenario: scenario || null })).digest('hex');
 const validName = name => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(name);

@@ -30,5 +30,5 @@ export async function inspectStates(tools, file, signal){
 export function statesText(report){
   const safe=value=>JSON.stringify(stripVTControlCharacters(String(value)).replace(/[\x00-\x1f\x7f]/g,''));
   return ['# 컴포넌트 UI 상태 점검',`파일: ${safe(report.file)} · ${report.scannedCharacters.toLocaleString('en-US')}자 분석${report.truncated?' · 32,000자 이후 생략':''}`,
-    ...report.states.flatMap(state=>['',`## ${state.label} · ${state.evidence.length?'관련 표현 발견':'확인 필요'}`,...state.evidence.map(e=>`  ${safe(report.file)}:${e.line} · ${safe(e.marker)}`),`화면 확인: ${state.verify}`]),'',report.limitations,'Angular 외부 템플릿은 해당 .html 파일을 별도로 지정하세요. 화면 검증은 /review URL로 이어갈 수 있습니다.'].join('\n');
+    ...report.states.flatMap(state=>['',`## ${state.label} · ${state.evidence.length?'관련 표현 발견':'확인 필요'}`,...state.evidence.map(e=>`  ${safe(report.file)}:${e.line} · ${safe(e.marker)}`),`화면 확인: ${state.verify}`]),'',report.limitations,'Angular 외부 템플릿은 해당 .html 파일을 별도로 지정하세요. 실제 동작은 /states run URL 시나리오.json으로 검증하세요.'].join('\n');
 }

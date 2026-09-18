@@ -75,7 +75,10 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
           await page.screenshot({ path: shot, animations: 'disabled', timeout: 10000 });
           result.screenshot = shot;
           if (baseline) result.visual = await compareBaseline(root, baseline, report.captureKey, report.environment, name, shot, path.join(dir, `${name}-diff.png`));
-        } catch (error) { result.error = String(error.message).slice(0, 400); }
+        } catch (error) {
+          result.error = String(error.message).slice(0, 400);
+          try { const shot=path.join(dir, `${name}-failure.png`); await page.screenshot({path:shot,timeout:2000}); result.screenshot=shot; } catch {}
+        }
         if (scenario) { result.trace = path.join(dir, `${name}-trace.zip`); await context.tracing.stop({ path: result.trace }); }
         report.results.push(result);
       } finally { await context.close(); }

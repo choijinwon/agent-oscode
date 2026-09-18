@@ -1,0 +1,12 @@
+{
+  "steps": [
+    { "action": "fill", "selector": "[data-testid=search-input]", "value": "no-matching-result" },
+    { "action": "click", "selector": "[data-testid=search-submit]" },
+    { "action": "visible", "selector": "[data-testid=loading]" },
+    { "action": "disabled", "selector": "[data-testid=search-submit]" },
+    { "action": "hidden", "selector": "[data-testid=loading]" },
+    { "action": "enabled", "selector": "[data-testid=search-submit]" },
+    { "action": "visible", "selector": "[data-testid=empty-state]" },
+    { "action": "count", "selector": "[data-testid=result-item]", "value": 0 }
+  ]
+}
