@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { configureAuth } from '../src/auth-cli.js';
 import { accessClipboard, lastAnswer, PasteDraft } from '../src/clipboard.js';
 import { estimateTokens } from '../src/context.js';
 import { analysisCheckpointContext } from '../src/analysis-memory.js';
@@ -28,6 +29,9 @@ const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08
 const print = text => process.stdout.write(clean(text) + '\n');
 const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
 
+  oscode auth set                  모델 API 키 별도 저장 (숨김 입력)
+  oscode auth status               키 저장 여부 확인
+  oscode auth remove               저장된 키 삭제
   oscode verify --changed           변경 사항 통합 검사·로컬 HTML 보고서
   --start SCRIPT --url URL          개발 서버 시작 또는 기존 URL 검사
   --open                           검증 후 HTML 결과 열기
@@ -87,15 +91,18 @@ API 키: ANTHROPIC_API_KEY 또는 OSCODE_API_KEY. 키는 세션에 저장하지 
 토큰 예산은 실행 전 추정 + API 사용량 기반이며 과금의 절대 상한이 아닙니다.
 복사·붙여넣기: /copy [code] /paste /draft /send /clear
 /paste는 클립보드를 초안으로 읽고, /send로만 모델에 전송합니다. 여러 줄과 들여쓰기를 보존합니다.
-명령: /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
+명령: /files /connect /agent general|frontend /frontend [경로] /plan [요청|on|off|show|list] /apply /help /usage [all] /compact /model MODEL /budget N /diff /checkpoints /undo [ID] /config /test /exit
 `;
 async function main() {
   const raw = process.argv.slice(2);
-  const cliArgs = raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
+  const authAction = raw[0] === 'auth' ? (raw[1] || 'status') : null;
+  const cliArgs = authAction ? raw.slice(2) : raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
     ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['key-stdin', 'copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
+  if (authAction) { await configureAuth(authAction, args); return; }
+  if (args['key-stdin']) throw new Error('--key-stdin requires auth set.');
   if (args['ab-live'] && !args['ab-context']) throw new Error('--ab-live requires --ab-context.');
   if (args.help) { print(help); return; }
   const root = await fs.realpath(path.resolve(args.cwd || '.'));
@@ -227,8 +234,18 @@ async function main() {
   if (args.usage) { print(usageReport(session, true)); return; }
   if (args.checkpoints) { print(checkpoints.list()); return; }
   if (args.undo) { await undo(args.undo); return; }
-  if (config.provider !== 'demo' && !config.model) throw new Error('모델을 지정하세요: --model MODEL 또는 OSCODE_MODEL. 무료 데모: --demo');
-  const provider = createProvider(config);
+  const readyProvider = () => {
+    if (config.provider !== 'demo' && !config.model) throw new Error('모델을 지정하세요: /model MODEL 또는 --model MODEL.');
+    return createProvider(config);
+  };
+  const connectionStatus = () => { try { readyProvider(); return null; } catch (error) { return error.message; } };
+  const connectHelp = () => {
+    print('로컬 모드: API 키 없이 /files, /frontend, /help, /paste 등을 사용할 수 있습니다.');
+    print('AI 자연어 분석·수정은 모델 연결이 필요합니다. 클립보드나 대화에 API 키를 입력하지 마세요.');
+    print('키 설정: 별도 터미널에서 oscode auth set을 실행하세요. 저장 후 이 입력창에서 /model MODEL로 지정하면 됩니다.');
+    print('로컬 모델: --provider compatible --base-url http://localhost:PORT/v1 --model MODEL (호환 서버가 실행 중이어야 합니다).');
+    print(connectionStatus() || '모델 설정이 준비되었습니다. 실제 연결은 요청 시 확인합니다.');
+  };
   const pasteDraft = new PasteDraft();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
@@ -256,7 +273,7 @@ async function main() {
   };
   const execute = async (prompt, executionPlan = null) => {
     active = new AbortController();
-    try { await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
+    try { const provider = readyProvider(); await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); }
     catch (e) { print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (session.turns.length) print(usageText(session.turns.at(-1).usage)); }
   };
@@ -273,18 +290,21 @@ async function main() {
     print(switchMode(config, tools, session, false, planLocked));
     await execute(planExecutionPrompt(plan), plan);
   };
-  print(`oscode 0.9.0 · ${config.provider}/${config.model} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
+  print(`oscode 0.9.1 · ${connectionStatus() ? 'LOCAL' : config.provider}/${config.model || '미설정'} · ${config.profile} · ${config.agent}${config.plan ? ' · PLAN' : ' · BUILD'}\n${root}\n세션 ${session.id} · 턴 예산 ${config.budget} tokens`);
   try {
     if (args['apply-plan']) { await apply(true); return; }
     if (args.demo) { await execute('프로젝트 파일을 보여줘'); return; }
     if (args.prompt) { await execute(args.prompt); return; }
     if (!rl) throw new Error('비대화형 실행은 --prompt를 지정하세요.');
-    print('/help 명령 목록 · Ctrl+C 실행 취소');
+    if (connectionStatus()) connectHelp();
+    print('자연어 요청 입력 · /help 명령 목록 · /connect 연결 안내 · Ctrl+C 실행 취소');
     while (!rl.closed) {
       let input;
       try { input = (await rl.question(`\noscode [${config.agent}/${config.plan ? 'PLAN' : 'BUILD'}] › `)).trim(); } catch { break; }
       if (!input) continue;
       if (input === '/exit') break;
+      if (input === '/connect') { connectHelp(); continue; }
+      if (input === '/files') { const result = await tools.execute('list_files', { path: '.' }); print(result.content); continue; }
       if (input === '/copy' || input === '/copy code') {
         try { await accessClipboard('write', lastAnswer(session, input === '/copy code')); print('클립보드에 복사했습니다.'); }
         catch (error) { print(error.message); }
@@ -356,6 +376,7 @@ async function main() {
         continue;
       }
       if (input.startsWith('/')) { print('알 수 없는 명령입니다. /help를 입력하세요.'); continue; }
+      if (connectionStatus()) { print('입력은 받았지만 모델에 전송하지 않았습니다.'); connectHelp(); continue; }
       await execute(input);
     }
   } finally { rl?.close(); process.removeListener('SIGINT', interrupt); }

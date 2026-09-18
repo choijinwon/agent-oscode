@@ -53,6 +53,24 @@ node bin/oscode.js --resume latest --agent frontend --plan --prompt '분석 체�
 
 저장된 답변은 `node bin/oscode.js --copy-last`로 API 호출 없이 복사할 수 있습니다. [운영체제별 지원과 사용법](docs/clipboard.md)
 
+## API 키 없이 시작
+
+```sh
+npx @choijinwon/oscode@latest
+```
+
+0.9.1부터 모델이나 API 키가 없어도 로컬 입력창이 열립니다. `/files`로 파일 목록, `/frontend`로 프론트엔드 구조를 확인하고 `/connect`로 모델 연결 방법을 볼 수 있습니다. `/paste` 등 로컬 명령도 사용할 수 있습니다. 모델이 연결되지 않은 상태에서 자연어 요청을 입력하면 전송하지 않고 연결 방법을 안내하며 입력창을 유지합니다. AI 분석·수정에는 API 모델이나 실행 중인 호환 로컬 모델이 필요합니다.
+
+## 모델 키 별도 설정
+
+```sh
+npx @choijinwon/oscode@latest auth set
+npx @choijinwon/oscode@latest auth status
+npx @choijinwon/oscode@latest --agent frontend --model YOUR_MODEL_ID
+```
+
+`auth set`은 키를 화면에 표시하지 않고 입력받아 사용자 전용 `~/.oscode/credentials.json`에 저장합니다. 프로젝트·대화 기록과 분리된 평문 파일이며, POSIX 파일 권한은 600입니다. `auth remove`로 삭제할 수 있습니다. [공급자별 설정과 보관 방식](docs/credentials.md)
+
 ## npm으로 실행
 
 Node.js 22 이상이 필요합니다. 저장소 안에서는 다음 명령을 사용할 수 있습니다.

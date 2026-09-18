@@ -1,3 +1,4 @@
+import { getCredential } from './credentials.js';
 import { estimateTokens } from './context.js';
 import { collectStream } from './stream.js';
 
@@ -74,8 +75,8 @@ export function createProvider(config, fetchImpl = fetch) {
   if (!['anthropic', 'compatible'].includes(kind)) throw new Error('Provider must be anthropic, compatible, or demo.');
   const base = config.baseUrl || (kind === 'anthropic' ? 'https://api.anthropic.com/v1' : 'https://openrouter.ai/api/v1');
   const url = endpoint(base, kind === 'anthropic' ? 'messages' : 'chat/completions');
-  const key = kind === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY;
-  if (!key && !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)) throw new Error(`Set ${kind === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OSCODE_API_KEY'} before running.`);
+  const key = (kind === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY) || getCredential(kind, base);
+  if (!key && !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)) throw new Error(`Set ${kind === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OSCODE_API_KEY'} or use oscode auth set --provider ${kind}.`);
   return { async complete(request, signal, onText) {
     const headers = { 'content-type': 'application/json' };
     if (kind === 'anthropic') { headers['anthropic-version'] = '2023-06-01'; if (key) headers['x-api-key'] = key; }
