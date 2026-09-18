@@ -201,3 +201,22 @@ that endpoint's model catalog before apply, but is not written to disk until
 apply. Summary and selection responses do not clutter the conversation or input
 history. Applied model/endpoint choices last for this chat; the key uses the
 existing credential store. The line-oriented `--simple` flow is unchanged.
+
+## Browser login with OpenRouter
+
+Choose `/settings` → `브라우저로 로그인 — OpenRouter`. OSCODE opens the official
+OpenRouter authorization page using S256 PKCE and a random, per-attempt loopback
+callback path. Approve in the browser, return to OSCODE, select a model and choose
+`적용하고 닫기`. This is OpenRouter API access, not a ChatGPT/Claude subscription
+login. The returned API key is never displayed and uses the existing private
+credential store only when settings are applied.
+
+The callback listener binds to 127.0.0.1 on a random port, accepts one authorization
+code, and closes on success, cancellation, errors or the three-minute timeout.
+Ctrl+C cancels. If the browser does not open, the settings panel displays the
+login URL. The browser and CLI must run on the same machine; remote/headless code
+entry is not implemented. Cancelling settings discards the local pending key but
+does not revoke a key already issued at OpenRouter; manage it on OpenRouter's
+key settings page. Model/endpoint selection still lasts for the current chat.
+
+Protocol reference: [OpenRouter OAuth PKCE](https://openrouter.ai/docs/guides/overview/auth/oauth).

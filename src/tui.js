@@ -261,6 +261,7 @@ export class ConsoleUI extends EventEmitter {
     if(this.settingsView) {
       const view=this.settingsView;
       body=['설정', '현재 채팅에 적용 · API 키는 별도 저장', '', `공급자  ${view.provider}`, `모델    ${view.model || '선택 필요'}`, `주소    ${view.baseUrl}`, `API 키  ${view.keyStatus}`, '', view.notice].map(s=>fit(s,box-2)).slice(0,bodyHeight);
+      if(view.loginURL)body=['OpenRouter 브라우저 로그인',view.notice,'',...wrapText(view.loginURL,box-2)].slice(0,bodyHeight);
       while(body.length<bodyHeight)body.push('');
     } else if(home) {
       const welcome = [

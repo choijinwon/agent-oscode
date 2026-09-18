@@ -23,3 +23,8 @@ test('aborted settings clear panel without committing',async()=>{
  const ui=fixture([]);ui.choose=async()=>{controller.abort();return 'apply';};
  await assert.rejects(settingsUI(ui,config,controller.signal,{readKey:()=>undefined}),/Cancelled/);assert.equal(config.model,'old');assert.equal(ui.settingsView,null);
 });
+test('browser login stages the OpenRouter key and applies it only on confirmation',async()=>{
+ const config={provider:'anthropic',model:'old'};const writes=[];const ui=fixture(['login','model','test/model','apply']);
+ await settingsUI(ui,config,undefined,{readKey:()=>undefined,writeKey:(...args)=>writes.push(args),login:async()=>{assert.equal(writes.length,0);return 'fake-oauth-key';},discover:async draft=>{assert.equal(draft.key,'fake-oauth-key');assert.equal(config.provider,'anthropic');return {models:['test/model']};}});
+ assert.equal(config.provider,'compatible');assert.equal(config.baseUrl,'https://openrouter.ai/api/v1');assert.equal(config.model,'test/model');assert.equal(writes[0][2],'fake-oauth-key');
+});

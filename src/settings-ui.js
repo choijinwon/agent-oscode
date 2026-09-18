@@ -1,3 +1,4 @@
+import {loginOpenRouter} from './openrouter-login.js';
 import {defaultBase, getCredential, setCredential} from './credentials.js';
 import {endpoint} from './providers.js';
 import {listModels, chooseModel} from './model-list.js';
@@ -12,6 +13,7 @@ const presets = [
 export async function settingsUI(ui, config, signal, dependencies={}) {
  const readKey=dependencies.readKey || getCredential, writeKey=dependencies.writeKey || setCredential;
  const discover=dependencies.discover || listModels;
+ const login=dependencies.login || loginOpenRouter;
  const draft={provider:config.provider,baseUrl:config.baseUrl || defaultBase(config.provider),model:config.model || ''};
  let newKey, notice='항목을 선택해 변경한 뒤 적용하세요.';
  const options={signal};
@@ -21,6 +23,7 @@ export async function settingsUI(ui, config, signal, dependencies={}) {
    check();
    ui.settingsView={...draft,keyStatus:newKey ? '변경 대기' : readKey(draft.provider,draft.baseUrl) ? '저장됨' : '미설정',notice};ui.render();
    const action=await ui.choose('설정 · ↑↓ 선택 / Enter 열기',[
+    {value:'login',label:'브라우저로 로그인 — OpenRouter'},
     {value:'provider',label:'공급자 변경'}, {value:'model',label:'모델 검색·선택'},
     {value:'address',label:'API 주소 변경'}, {value:'key',label:'API 키 입력 (숨김)'},
     {value:'apply',label:'적용하고 닫기'}, {value:'cancel',label:'취소 · 변경 버리기'}
@@ -28,7 +31,15 @@ export async function settingsUI(ui, config, signal, dependencies={}) {
    check();
    if(action==='cancel')return false;
    try {
-    if(action==='provider') {
+    if(action==='login') {
+     notice='브라우저에서 OpenRouter 연결을 승인하세요. Ctrl+C 취소';ui.settingsView.notice=notice;ui.render();
+     const key=await login({signal,onURL:url=>{ui.append?.(`\nOpenRouter 로그인 주소 (브라우저가 열리지 않으면 직접 열기):\n${url}\n`);ui.settingsView.loginURL=url;ui.settingsView.notice=notice;ui.render();},onNotice:text=>{if(ui.settingsView){ui.settingsView.notice=text;ui.render();}}});
+     check();
+     const base=defaultBase('compatible');
+     if(draft.provider!=='compatible' || draft.baseUrl!==base)draft.model='';
+     draft.provider='compatible';draft.baseUrl=base;newKey=key;
+     notice='로그인 완료 · 모델을 선택하고 적용하세요. 취소 시 발급된 키는 OpenRouter에서 삭제할 수 있습니다.';
+    } else if(action==='provider') {
      const id=await ui.choose('공급자 선택',presets,options);const preset=presets.find(p=>p.value===id);
      if(preset) { const base=preset.baseUrl || (await ui.question('API 주소: ',options)).trim();endpoint(base,'models');
       if(draft.provider!==preset.provider || draft.baseUrl!==base) {draft.provider=preset.provider;draft.baseUrl=base;draft.model='';newKey=undefined;}
