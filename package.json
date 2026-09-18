@@ -1,6 +1,6 @@
 {
   "name": "@choijinwon/oscode",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Open-source AI coding CLI for React, Vue, Angular, and Svelte frontend developers, with UI diagnostics, plan mode, and token budgets.",
   "type": "module",
   "bin": {
