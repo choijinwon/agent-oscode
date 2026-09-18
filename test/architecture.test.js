@@ -36,3 +36,13 @@ test('architecture scans are bounded and available during frontend planning', as
     } } });
   assert.equal(calls, 2);
 });
+
+test('interactive architecture report saves readable evidence and rejects outside scope',async t=>{
+ const {architectureReport}=await import('../src/architecture.js');
+ const root=await fixture(t),tools=new WorkspaceTools(root,{readOnly:true});
+ const result=await architectureReport(tools);
+ assert(result.text.includes('순환 참조'));assert(result.text.includes('공통 UI → 기능 결합'));assert.equal(result.report.dependencyCount,2);
+ assert.equal(await fs.readFile(result.markdown,'utf8'),result.text+'\n');assert.equal(JSON.parse(await fs.readFile(result.json,'utf8')).scannedFiles,2);
+ await assert.rejects(()=>architectureReport(tools,'..'));
+ const controller=new AbortController();controller.abort();await assert.rejects(()=>architectureReport(tools,'.',controller.signal),/Cancelled/);
+});

@@ -1,4 +1,5 @@
 export const commandPalette = [
+  ['/architecture', '프론트엔드 폴더 역할·의존 관계·순환 참조 분석'],
   ['/review', '변경 파일·프로젝트 검사·반응형·접근성 검증'], ['/review show', '마지막 검증 결과 보기'],
   ['/summary', '작업 결과·도구 실행 근거 확인'], ['/handoff', '작업 인계 파일 저장'], ['/handoff copy', '작업 인계 내용 복사'],
   ['/map', '관련 파일·함수·컴포넌트 코드 지도'],

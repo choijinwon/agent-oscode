@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {architectureReport} from '../src/architecture.js';
 import {deliveryReview,reviewText,reviewVerdict} from '../src/delivery-review.js';
 import {taskReport,exportHandoff} from '../src/task-report.js';
 import {repositoryMap} from '../src/repository-map.js';
@@ -439,6 +440,12 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if(input==='/architecture'||input.startsWith('/architecture ')){
+        active=new AbortController();screen?.setStage('아키텍처 분석 중');
+        try{const report=await architectureReport(tools,input.slice(13).trim()||'.',active.signal);print(report.text);print(`\n보고서: ${report.markdown}\n구조 데이터: ${report.json}`);}
+        catch(error){print(`아키텍처 분석 중단: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
       }
       if(input==='/review'||input.startsWith('/review ')){
         const target=input.slice(7).trim();
