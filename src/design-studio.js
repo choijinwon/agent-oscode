@@ -6,6 +6,7 @@ import {openDesignGallery} from './design-gallery.js';
 export const designHelp=`/design gallery [react|vue|angular|svelte] · 디자인·상태 미리보기
 /design mobile [react|vue|angular|svelte] · 모바일 컴포넌트·화면 크기 미리보기
 /design admin [react|vue|angular|svelte] · 관리자 디자인·테이블·사용자 화면
+/design erp [react|vue|angular|svelte] · 회계 전표 테이블·입력 그리드
 /design interact [react|vue|angular|svelte] · 인터랙션 패턴·키보드 동작 미리보기
 /design list · 기본·팀 컴포넌트 목록
 /design select 프레임워크/디자인 · 브라우저 없이 선택
@@ -29,10 +30,10 @@ export class DesignStudio{
  async command(raw,signal,options={}){
   const [,action='',rest='']=/^(\S+)(?:\s+([\s\S]*))?$/.exec(raw.trim())||[];if(!action)return designHelp;
   if(action==='list'){const r=await designCatalogSummary(this.tools,signal);return [...r.components.map(x=>`${x.id} · ${x.name} · ${x.group}`),...r.team.map(x=>`team:${x.name} · ${x.framework} · ${x.description}`)].join('\n');}
-  if(action==='gallery'||action==='mobile'||action==='admin'||action==='interact'){
+  if(action==='gallery'||action==='mobile'||action==='admin'||action==='interact'||action==='erp'){
    const framework=rest||'react';if(!Object.hasOwn(designFrameworks,framework))throw Error('react/vue/angular/svelte 중 선택하세요.');
    const theme=await projectTheme(this.tools,signal),registry=await readRegistry(this.tools);
-   const selected=await openDesignGallery(this.tools,{theme:theme.tokens,framework,registry:registry.items,initial:action==='mobile'?'mobile-tabs':action==='admin'?'admin-dashboard':action==='interact'?'accordion':'button'},signal,options);
+   const selected=await openDesignGallery(this.tools,{theme:theme.tokens,framework,registry:registry.items,initial:action==='mobile'?'mobile-tabs':action==='admin'?'admin-dashboard':action==='interact'?'accordion':action==='erp'?'erp-ledger':'button'},signal,options);
    if(selected.team){this.team=registry.items.find(x=>x.name===selected.team);this.selection=null;}
    else{this.selection=selected;this.team=null;}
    return `디자인 선택: ${selected.team||selected.item} · ${selected.framework}\n/design code 로 코드 확인\n/design apply 컴포넌트경로 로 새 파일 생성`;

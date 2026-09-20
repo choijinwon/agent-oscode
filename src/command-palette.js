@@ -1,6 +1,7 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
   ['/design motion ', '인터랙션 강도 auto·reduced·off 선택'],
+  ['/design erp ', '회계 전표 조회·셀 편집·차대변 합계·초안 검증'],
   ['/design interact ', '아코디언·작업 메뉴·되돌리기·단계 폼·선택·순서 변경'],
   ['/design admin ', '관리자 대시보드·필터 테이블·사용자 초대 디자인'],
   ['/design gallery ', '디자인 갤러리·색상·크기·상태별 미리보기'],

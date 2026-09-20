@@ -1,6 +1,8 @@
 import {designMotion} from './design-motion.js';
 import {adminAction} from './design-admin-behavior.js';
 import {patternAction} from './design-pattern-behavior.js';
+import {erpScale,erpParseAmount,erpFormatAmount,erpValidateJournal} from './design-erp-money.js';
+import {erpAction,erpUpdateGrid,erpAppendRow,erpUpdateLedger} from './design-erp-behavior.js';
 import {designAction} from './design-catalog.js';
 // This frame only renders bundled markup. Imported team code never enters it.
 export function mobilePreviewRuntime(parentOrigin) {
@@ -32,10 +34,10 @@ export function mobilePreviewRuntime(parentOrigin) {
       overflow:Math.max(0, document.documentElement.scrollWidth - innerWidth), smallTargets, obscured}, parentOrigin);
   }
   function schedule() { if (!queued) { queued = true; requestAnimationFrame(measure); } }
-  for (const type of ['click','keydown','submit','input','change','focusin','focusout','mouseout','toggle']) {
+  for (const type of ['click','keydown','submit','input','change','focusin','focusout','mouseout','toggle','paste']) {
     root.addEventListener(type, event => {
       const emit=()=>parent.postMessage({type:'oscode-mobile-action'},parentOrigin);
-      designAction(event,emit);adminAction(event,emit);patternAction(event,emit);
+      designAction(event,emit);adminAction(event,emit);patternAction(event,emit);erpAction(event,emit);
       schedule();
     },type==='toggle');
   }
@@ -52,5 +54,5 @@ export function mobilePreviewHtml(markup, css, settings, nonce) {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>모바일 디자인 미리보기</title><style>
 html{color-scheme:light;--oc-safe-bottom:${settings.safeArea ? 34 : 0}px}body{margin:0}*{box-sizing:border-box}
 ${css}
-</style></head><body><section class="oc-design" data-variant="${settings.variant}" data-size="${settings.size}" data-motion="${settings.motion||'auto'}"${settings.mobile ? ' data-mobile="true"' : ''}${settings.admin ? ' data-admin="true"' : ''}${settings.interaction ? ' data-interaction="true"' : ''}>${markup.replaceAll('__id__','mobile')}</section><script nonce="${nonce}">${designAction.toString()}\n${designMotion.toString()}\n${adminAction.toString()}\n${patternAction.toString()}\n(${mobilePreviewRuntime.toString()})(${config});<` + '/script></body></html>';
+</style></head><body><section class="oc-design" data-variant="${settings.variant}" data-size="${settings.size}" data-motion="${settings.motion||'auto'}"${settings.mobile ? ' data-mobile="true"' : ''}${settings.admin ? ' data-admin="true"' : ''}${settings.interaction ? ' data-interaction="true"' : ''}${settings.erp ? ' data-erp="true"' : ''}>${markup.replaceAll('__id__','mobile')}</section><script nonce="${nonce}">${designAction.toString()}\n${designMotion.toString()}\n${adminAction.toString()}\n${patternAction.toString()}\n${[erpScale,erpParseAmount,erpFormatAmount,erpValidateJournal,erpUpdateGrid,erpAppendRow,erpUpdateLedger,erpAction].map(fn=>fn.toString()).join('\n')}\n(${mobilePreviewRuntime.toString()})(${config});<` + '/script></body></html>';
 }
