@@ -43,6 +43,7 @@ export function erpUpdateLedger(root) {
  rows.forEach(row=>{row.toggleAttribute('hidden',!visible.includes(row));row.toggleAttribute('data-selected',Boolean(row.querySelector('input:checked')));});
  const sort=root.querySelector('[data-erp-sort][data-direction]');
  if(sort){const key='data-'+sort.getAttribute('data-erp-sort'),direction=sort.getAttribute('data-direction')==='ascending'?1:-1;rows.sort((a,b)=>(a.getAttribute(key)||'').localeCompare(b.getAttribute(key)||'')*direction);const body=root.querySelector('tbody');if(body)for(const row of rows)body.append(row);}
+ else{rows.sort((a,b)=>Number(a.getAttribute('data-erp-position'))-Number(b.getAttribute('data-erp-position')));const body=root.querySelector('tbody');if(body)for(const row of rows)body.append(row);}
  const groups=new Map();
  for(const row of visible){
   const currency=row.getAttribute('data-currency')||'KRW',company=row.getAttribute('data-company')||'',key=company+' · '+currency,scale=erpScale(currency);
@@ -63,7 +64,7 @@ export function erpAction(event,emit=()=>{}) {
  if(root.querySelector('[data-erp-ledger]')){
   const filter=origin.matches('[data-erp-query],[data-erp-company-filter],[data-erp-currency-filter],[data-erp-status-filter]');
   if(filter&&['input','change'].includes(event.type)||event.type==='click'&&origin.closest('[data-erp-reset]')){
-   if(!filter){const query=root.querySelector('[data-erp-query]');if(query instanceof HTMLInputElement)query.value='';root.querySelectorAll('select').forEach(select=>select.value='all');}
+   if(!filter){const query=root.querySelector('[data-erp-query]');if(query instanceof HTMLInputElement)query.value='';root.querySelectorAll('[data-erp-company-filter],[data-erp-currency-filter],[data-erp-status-filter]').forEach(select=>{if(select instanceof HTMLSelectElement)select.value='all';});}
    root.querySelectorAll('[data-erp-select]').forEach(input=>{if(input instanceof HTMLInputElement)input.checked=false;});erpUpdateLedger(root);return;
   }
   if(event.type==='change'&&origin instanceof HTMLInputElement&&origin.hasAttribute('data-erp-select-all'))for(const row of root.querySelectorAll('[data-erp-row]:not([hidden])')){const input=row.querySelector('input');if(input)input.checked=origin.checked;}

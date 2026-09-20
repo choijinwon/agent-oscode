@@ -11,7 +11,7 @@ export function validateRegistry(data){
   if(!item||Object.keys(item).some(k=>!['name','framework','extension','cssReference','code','css','description','usage','hash'].includes(k))||!namePattern.test(item.name)||names.has(item.name)||!Object.hasOwn(designFrameworks,item.framework))throw Error('레지스트리 이름·프레임워크 오류');names.add(item.name);
   if(item.extension!==undefined&&!extensions[item.framework].includes(item.extension))throw Error('팀 컴포넌트 확장자 오류');
   if(item.cssReference!==undefined&&(typeof item.cssReference!=='string'||item.cssReference.length>240||!/^\.\.?\/[\w./ -]+\.css$/.test(item.cssReference)))throw Error('팀 CSS 참조 오류');
-  for(const [key,limit]of [['code',32000],['css',16000],['description',400],['usage',1000]])if(typeof item[key]!=='string'||item[key].length>limit||item[key].includes('\0'))throw Error(`레지스트리 ${key} 오류`);
+  for(const [key,limit]of [['code',64000],['css',16000],['description',400],['usage',1000]])if(typeof item[key]!=='string'||item[key].length>limit||item[key].includes('\0'))throw Error(`레지스트리 ${key} 오류`);
   if(!item.code.trim()||item.hash!==digest(item.code+'\n'+item.css))throw Error('컴포넌트 코드 해시가 일치하지 않습니다.');
  }return data;
 }
