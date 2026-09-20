@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {FrontendWorkbench,workbenchHelp} from '../src/frontend-workbench.js';
 import {McpHub} from '../src/mcp.js';
 import {UiRepair} from '../src/ui-repair.js';
 import {recordUi} from '../src/ui-recorder.js';
@@ -55,7 +56,9 @@ const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08
 let screen = null;
 const output = text => screen ? screen.append(clean(text)) : process.stdout.write(text);
 const print = text => output(clean(text) + '\n');
-const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
+const help = `${workbenchHelp}
+
+oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
 
   oscode auth set                  모델 API 키 별도 저장 (숨김 입력)
   oscode auth status               키 저장 여부 확인
@@ -329,6 +332,7 @@ async function main(raw = process.argv.slice(2), host) {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  const workbench=new FrontendWorkbench(tools);
   tools.mcp=new McpHub(tools);
   if(host)tools.mcp.runExclusive=(run,signal)=>host.exclusive(root,run,signal);
   const originalPerform=tools.perform.bind(tools);
@@ -344,7 +348,7 @@ async function main(raw = process.argv.slice(2), host) {
   };
   if(host) {
     const perform=tools.perform.bind(tools);
-    tools.perform=(name,input,signal)=>['edit_file','write_file','shell','ui_check','verify_project'].includes(name)
+    tools.perform=(name,input,signal)=>['edit_file','write_file','shell','ui_check','ui_inspect','ui_stress','ui_hydration','verify_project'].includes(name)
       ? host.exclusive(root,()=>perform(name,input,signal),signal) : perform(name,input,signal);
   }
   screen?.on('toggleMode', () => {
@@ -475,6 +479,23 @@ async function main(raw = process.argv.slice(2), host) {
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
         continue;
+      }
+      if(input==='/inspect fix'||input.startsWith('/inspect fix ')){
+        try{
+          const unavailable=connectionStatus();if(unavailable)throw Error(`모델 연결이 필요합니다. ${unavailable}`);
+          const prompt=await workbench.beginRepair(input.slice(12).trim());
+          const turn=await execute(prompt,null,false);
+          active=new AbortController();screen?.setStage('선택한 요소 재진단 중');
+          const finish=()=>workbench.finishRepair(turn?.status==='done',active.signal);
+          print(await (host?host.exclusive(root,finish,active.signal):finish()));
+        }catch(error){print(`요소 수정 중단: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
+      }
+      if(/^\/(inspect|css|stress|reuse|hydrate|bug|replay)(?:\s|$)/.test(input)){
+        active=new AbortController();screen?.setStage('프론트엔드 도구 실행 중');
+        try{const run=()=>workbench.command(input,active.signal);print(await(host?host.exclusive(root,run,active.signal):run()));}
+        catch(error){print(`프론트엔드 도구: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
       }
       if(input==='/states fix'||input.startsWith('/states fix ')){
         let flow;

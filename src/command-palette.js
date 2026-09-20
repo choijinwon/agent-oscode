@@ -1,5 +1,13 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
+  ['/inspect ', '화면 요소 선택·관련 소스·스타일 진단'],
+  ['/inspect fix ', '선택한 요소 수정·같은 조건 재진단'],
+  ['/css ', '선택자의 실제 CSS·부모 레이아웃 진단'],
+  ['/stress ', '긴 글·좁은 화면·다크·연속 클릭·지연 응답 검사'],
+  ['/reuse ', '프로젝트 기존 컴포넌트·API·사용 후보 찾기'],
+  ['/bug ', 'UI 실패 화면·시나리오·실행 기록 공유 묶음 저장'],
+  ['/replay ', '공유 시나리오를 개발 서버에서 재현'],
+  ['/hydrate ', 'SSR·하이드레이션·새로고침 차이 진단'],
   ['/mcp', '외부 MCP 서버 연결·도구 선택·해제'],
   ['/states fix ', '실패 확인 → AI 수정 → 동일 조건 재검증·전후 보고서'],
   ['/states record ', '화면 클릭·입력 녹화와 검증 조건 선택'],

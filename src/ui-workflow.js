@@ -7,11 +7,12 @@ import { sessionDirectory } from './session.js';
 export function validateScenario(data) {
   if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => !['steps','routes'].includes(k)) || !Array.isArray(data.steps) || !data.steps.length || data.steps.length > 20) throw new Error('Scenario requires 1–20 steps.');
   validateRoutes(data.routes);
-  const actions = { click: [], fill: ['value'], press: ['key'], visible: [], hidden: [], disabled: [], enabled: [], count: ['value'], text: ['value'] };
+  const actions = { click: [], clickMany: ['value'], wait: ['value'], fill: ['value'], press: ['key'], visible: [], hidden: [], disabled: [], enabled: [], count: ['value'], text: ['value'] };
   for (const step of data.steps) {
-    if (!step || !Object.hasOwn(actions, step.action)) throw new Error('Actions: click, fill, press, visible, hidden, disabled, enabled, count, text.');
+    if (!step || !Object.hasOwn(actions, step.action)) throw new Error('Actions: click, clickMany, wait, fill, press, visible, hidden, disabled, enabled, count, text.');
+    if(step.action==='wait'){if(Object.keys(step).some(k=>!['action','value'].includes(k))||!Number.isInteger(step.value)||step.value<0||step.value>3000)throw Error('wait value: 0–3000 ms');continue;}
     const keys = ['action', 'selector', ...actions[step.action]];
-    if (Object.keys(step).some(k => !keys.includes(k)) || keys.some(k => (step.action === 'count' && k === 'value' ? !Number.isInteger(step[k]) || step[k] < 0 || step[k] > 5000 : typeof step[k] !== 'string' || step[k].length > 2000)) || !step.selector.trim()) throw new Error('Invalid scenario step. Use a selector and required value/key.');
+    if (Object.keys(step).some(k => !keys.includes(k)) || keys.some(k => (['count','clickMany'].includes(step.action) && k === 'value' ? !Number.isInteger(step[k]) || step[k] < 0 || step[k] > (step.action==='clickMany'?5:5000) || (step.action==='clickMany'&&step[k]<2) : typeof step[k] !== 'string' || step[k].length > 2000)) || !step.selector.trim()) throw new Error('Invalid scenario step. Use a selector and required value/key.');
   }
   return data;
 }
@@ -21,8 +22,10 @@ export async function runScenario(page, scenario) {
   for (const [index, step] of scenario.steps.entries()) {
     const item = { step: index + 1, action: step.action, selector: step.selector, passed: false };
     try {
+      if(step.action==='wait'){await page.waitForTimeout(step.value);item.passed=true;results.push(item);continue;}
       const locator = page.locator(step.selector);
-      if (step.action === 'click') await locator.click({ timeout: 5000 });
+      if(step.action==='clickMany'){for(let n=0;n<step.value;n++)await locator.click({timeout:5000});}
+      else if (step.action === 'click') await locator.click({ timeout: 5000 });
       if (step.action === 'fill') await locator.fill(step.value, { timeout: 5000 });
       if (step.action === 'press') await locator.press(step.key, { timeout: 5000 });
       if (step.action === 'hidden') await locator.waitFor({ state: 'hidden', timeout: 5000 });

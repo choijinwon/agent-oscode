@@ -25,6 +25,12 @@ The demo reads local project files without calling a model or requiring an API k
 
 OpenCode의 여러 모델 연결 방식, Pi의 작고 분리된 실행 코어, Claude 계열 도구의 탐색·편집·검증 흐름을 참고한 **독립 구현**이다. 원본 프로젝트 소스나 Claude Code를 합친 제품은 아니며, 현재 연결은 Anthropic Messages API와 Chat Completions 호환 API다.
 
+## 화면 기반 프론트엔드 작업 (최신 GitHub 소스)
+
+`/inspect URL`로 화면 요소를 선택하고 `/inspect fix 요청`으로 수정한 뒤 같은 선택자를 재진단합니다. `/css`는 계산 스타일·부모 레이아웃·소스 후보, `/reuse`는 기존 컴포넌트, `/stress`는 긴 글·좁은 화면·응답 순서 등 지정 조건, `/hydrate`는 SSR·하이드레이션 신호를 조사합니다. `/bug`로 화면·시나리오를 로컬 묶음으로 저장하고 `/replay`로 다시 실행합니다.
+
+[명령·예제·검증 범위](docs/frontend-workbench.md). 소스 후보는 소유 관계의 확정이 아니며, 모든 진단은 관찰 범위를 표시합니다. AI 수정 외 진단은 모델 키 없이 실행합니다. **npm 0.10.0에는 아직 포함되지 않습니다.**
+
 ## 프론트엔드 토큰 절약과 A/B 비교
 
 `--agent frontend`는 컴포넌트와 직접 연결된 코드부터 읽도록 안내하고, 긴 셸 결과를 요약합니다. `--context-mode standard`로 기존 동작을 사용할 수 있습니다.

@@ -1,0 +1,8 @@
+{
+  "cases": [
+    {"name":"긴 제목과 좁은 화면","viewport":"mobile","probe":{"width":320,"text":[{"selector":"#title","value":"프론트엔드 프로젝트 이름이 아주 길어졌을 때 레이아웃을 확인합니다"}]},"scenario":{"steps":[{"action":"visible","selector":"#title"}]}},
+    {"name":"다크 모드와 큰 글자","viewport":"mobile","probe":{"colorScheme":"dark","textScale":1.5},"scenario":{"steps":[{"action":"enabled","selector":"#search"}]}},
+    {"name":"느린 응답 중 로딩","viewport":"mobile","scenario":{"routes":[{"path":"/api/search","method":"GET","responses":[{"status":200,"json":{"label":"최신 결과"},"delayMs":1500}]}],"steps":[{"action":"click","selector":"#search"},{"action":"visible","selector":"#loading"},{"action":"text","selector":"#result","value":"최신 결과"},{"action":"hidden","selector":"#loading"}]}},
+    {"name":"연속 클릭과 응답 순서 역전","viewport":"desktop","scenario":{"routes":[{"path":"/api/search","method":"GET","responses":[{"status":200,"json":{"label":"이전 결과"},"delayMs":1200},{"status":200,"json":{"label":"최신 결과"},"delayMs":50}]}],"steps":[{"action":"clickMany","selector":"#search","value":2},{"action":"wait","value":1600},{"action":"text","selector":"#result","value":"최신 결과"}]}}
+  ]
+}

@@ -1,3 +1,4 @@
+import {validateProbe,applyProbe} from './ui-probes.js';
 import {installRoutes} from './ui-network.js';
 import { validateScenario, runScenario, captureKey, compareBaseline, auditAccessibility } from './ui-workflow.js';
 import fs from 'node:fs/promises';
@@ -13,9 +14,10 @@ export function validateUiUrl(value) {
 function safeUrl(value) {
   try { const url = new URL(value); return `${url.origin}${url.pathname}`.slice(0, 300); } catch { return '[invalid URL]'; }
 }
-export async function checkUi({ root, url, viewport = 'all', signal, scenario, baseline, a11y = false, chromium: injected }) {
+export async function checkUi({ root, url, viewport = 'all', signal, scenario, baseline, a11y = false, probe, chromium: injected }) {
   url = validateUiUrl(url);
   if (scenario) validateScenario(scenario);
+  validateProbe(probe);
   if (viewport !== 'all' && !Object.hasOwn(viewports, viewport)) throw new Error('viewport must be all, mobile, tablet or desktop.');
   if (signal?.aborted) throw new Error('Cancelled.');
   let chromium = injected;
@@ -32,16 +34,16 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
   try {
     if (signal?.aborted) throw new Error('Cancelled.');
     const dir = await fs.mkdtemp(path.join(await sessionDirectory(root), 'ui-'));
-    const report = { version: 2, captureKey: captureKey(url, scenario), environment: { platform: process.platform, browser: browser.version() }, url: safeUrl(url), created: new Date().toISOString(), directory: dir, results: [], limitations: 'Page load and optional saved scenario; 500 ms settling, top-document DOM capped at 5000 elements. Overflow candidates may be intentional. Optional pixel comparison and automated accessibility checks; no complete accessibility audit or source-map attribution. Screenshots and messages may contain page data.' };
+    const report = { version: 2, captureKey: captureKey(url, probe?{scenario,probe}:scenario), probe, environment: { platform: process.platform, browser: browser.version() }, url: safeUrl(url), created: new Date().toISOString(), directory: dir, results: [], limitations: 'Page load and optional saved scenario; 500 ms settling, top-document DOM capped at 5000 elements. Overflow candidates may be intentional. Optional pixel comparison and automated accessibility checks; no complete accessibility audit or source-map attribution. Screenshots and messages may contain page data.' };
     for (const [name, size] of Object.entries(viewports).filter(([name]) => viewport === 'all' || name === viewport)) {
       if (signal?.aborted) throw new Error('Cancelled.');
-      const context = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block', acceptDownloads: false });
+      const context = await browser.newContext({ viewport: probe?.width?{...size,width:probe.width}:size, ...(probe?.colorScheme?{colorScheme:probe.colorScheme}:{}), ...(probe?.locale?{locale:probe.locale}:{}), deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block', acceptDownloads: false });
       try {
         if (scenario) await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
         const network=await installRoutes(context,url,scenario?.routes);
         const page = await context.newPage();
         page.setDefaultTimeout(10000);
-        const result = { viewport: name, ...size, console: [], errors: [], requests: [], overflow: null, screenshot: null };
+        const result = { viewport: name, ...size, ...(probe?.width?{width:probe.width}:{}), console: [], errors: [], requests: [], overflow: null, screenshot: null };
         const add = (array, item) => { if (array.length < 20 && !array.some(x => JSON.stringify(x) === JSON.stringify(item))) array.push(item); };
         page.on('console', msg => { if (['error', 'warning'].includes(msg.type())) add(result.console, { type: msg.type(), text: msg.text().slice(0, 400), source: safeUrl(msg.location().url), line: msg.location().lineNumber }); });
         page.on('pageerror', error => add(result.errors, error.message.slice(0, 400)));
@@ -52,7 +54,10 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
           const response = await page.goto(url, { waitUntil: 'load', timeout: 10000 });
           result.status = response?.status() ?? null;
           await page.waitForTimeout(500);
+          if(probe)result.probe=await applyProbe(page,probe);
           if (scenario) result.scenario = await runScenario(page, scenario);
+          if(probe?.settleMs)await page.waitForTimeout(probe.settleMs);
+          for(const item of probe?.text||[]){if(await page.locator(item.selector).count()!==1||await page.locator(item.selector).textContent()!==item.value)throw Error('텍스트 스트레스 조건이 앱의 재렌더링으로 변경되었습니다. 테스트 데이터를 앱에 직접 연결하세요.');}
           if (a11y) result.accessibility = await auditAccessibility(page);
           result.overflow = await page.evaluate(() => {
             const width = document.documentElement.clientWidth;
@@ -90,6 +95,7 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
     report.findings = report.results.reduce((n, r) => n + (r.overflow?.pixels > 1 ? 1 : 0) + r.errors.length + r.requests.filter(item=>!item.simulated).length + r.console.length + (r.simulation?.enabled&&!r.simulation.complete?1:0) + (r.scenario && !r.scenario.passed ? 1 : 0) + (r.visual?.changed ? 1 : 0) + (r.accessibility?.totalViolations || 0), 0);
     report.incomplete = report.results.some(r => r.error || (r.simulation?.enabled&&!r.simulation.complete));
     report.file = path.join(dir, 'report.json');
+    await fs.writeFile(path.join(dir,'replay.json'),JSON.stringify({version:1,url:safeUrl(url),viewport,scenario,baseline,a11y,probe},null,2),{flag:'wx',mode:0o600});
     await fs.writeFile(report.file, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
     return report;
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); await browser.close(); }
