@@ -70,6 +70,9 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 대화 기능:
+  /states record URL               화면 조작과 검증 조건 녹화
+  /states run URL 파일.json         저장한 시나리오 검증
+  /states fix URL 파일.json         실패 확인·AI 수정·동일 조건 재검증
   @src/Button.tsx 요청              선택 파일 첨부 (Tab/방향키 자동완성)
   /skills                          .oscode/skills 스킬 선택 · off 해제
   /context                         파일·대화 컨텍스트 관리
@@ -450,6 +453,7 @@ async function main(raw = process.argv.slice(2), host) {
         try{
           const match=/^\/states fix\s+(\S+)\s+(.+)$/.exec(input);
           if(!match)throw Error('사용법: /states fix URL 시나리오.json');
+          const unavailable=connectionStatus();if(unavailable)throw Error(`AI 수정에 모델 연결이 필요합니다. /settings에서 연결하세요. 로컬 검사만 하려면 /states run을 사용하세요. ${unavailable}`);
           active=new AbortController();screen?.setStage('수정 전 화면 검증 중');
           flow=await new UiRepair(tools).begin(match[1],match[2],active.signal);
           print(`${flow.label} · 보고서: ${flow.html}`);

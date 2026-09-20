@@ -16,3 +16,16 @@ test('no repair on a passing baseline; stopped or incomparable runs cannot claim
 test('browser denial prevents UI repair execution',async t=>{
  const {flow}=await fixture(t,async()=>{throw Error('Should not run');});flow.tools.approve=async()=>false;await assert.rejects(flow.begin('http://localhost','scenario.json'),/승인/);
 });
+
+test('fail-fast with unused later mock responses still permits repair, but incomplete rerun is not resolved',async t=>{
+ const before=result(false);before.incomplete=true;before.results[0].simulation={enabled:true,complete:false,errors:[],coverage:[{planned:3,requested:1}]};
+ const {flow}=await fixture(t,async()=>structuredClone(before));await flow.begin('http://localhost','scenario.json');assert(flow.canFix);
+ await flow.finish(true);assert.equal(flow.status,'incomplete');
+ const broken=structuredClone(before);broken.results[0].error='browser closed';const other=await fixture(t,async()=>broken);await other.flow.begin('http://localhost','scenario.json');assert(!other.flow.canFix);
+});
+test('passing assertions cannot mark unexpected runtime errors or real HTTP failures resolved',async t=>{
+ const {scenarioPassed}=await import('../src/ui-repair.js');
+ const a=result(true);a.results[0].errors=['Unhandled exception'];assert(!scenarioPassed(a));
+ const b=result(true);b.results[0].requests=[{status:500,simulated:false}];assert(!scenarioPassed(b));
+ b.results[0].requests[0].simulated=true;assert(scenarioPassed(b));
+});

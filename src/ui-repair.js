@@ -5,7 +5,7 @@ import {checkUi,validateUiUrl} from './ui-check.js';
 import {validateScenario} from './ui-workflow.js';
 import {sessionDirectory} from './session.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const scenarioPassed=report=>Boolean(report&&!report.incomplete&&report.results?.length&&report.results.every(r=>!r.error&&r.scenario?.passed&&r.scenario.assertions>0&&(!r.simulation?.enabled||r.simulation.complete)));
+export const scenarioPassed=report=>Boolean(report&&!report.incomplete&&report.results?.length&&report.results.every(r=>!r.error&&!(r.errors?.length)&&!(r.requests||[]).some(q=>!q.simulated&&(q.failure||q.status>=400))&&r.scenario?.passed&&r.scenario.assertions>0&&(!r.simulation?.enabled||r.simulation.complete)));
 export class UiRepair {
  constructor(tools,check=checkUi){this.tools=tools;this.check=check;}
  async run(signal){
@@ -17,7 +17,8 @@ export class UiRepair {
   this.url=validateUiUrl(url);this.scenario=JSON.parse(await this.tools.text(await this.tools.resolve(file)));validateScenario(this.scenario);
   if(!this.scenario.steps.some(s=>['visible','hidden','text','count','enabled','disabled'].includes(s.action)))throw Error('확인 조건이 있는 시나리오가 필요합니다.');
   this.id=randomUUID();this.file=file;this.before=await this.run(signal);
-  this.canFix=!this.before.incomplete&&this.before.results.some(r=>r.scenario&&!r.scenario.passed);
+  // Unused later mock responses are expected after fail-fast; they must not block repair.
+  this.canFix=this.before.results.every(r=>!r.error&&!r.simulation?.errors?.length)&&this.before.results.some(r=>r.scenario&&!r.scenario.passed);
   this.status=scenarioPassed(this.before)?'already-passed':this.canFix?'awaiting-repair':'incomplete';
   await this.save();return this;
  }

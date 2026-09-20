@@ -1,6 +1,6 @@
 import {appearance, palettes} from './appearance.js';
 import {conversationRows,paintConversationRow} from './chat-layout.js';
-import { searchCommands, commandPalette } from './command-palette.js';
+import { searchCommands, commandPalette, primaryCommands } from './command-palette.js';
 import { fileCompletions } from './selected-context.js';
 import { EventEmitter } from 'node:events';
 import { emitKeypressEvents } from 'node:readline';
@@ -228,6 +228,7 @@ export class ConsoleUI extends EventEmitter {
     const references = fileCompletions(prefix, this.files);
     if (references.length) return references.map(value => value + chars(this.buffer).slice(this.cursor).join(''));
     if (!this.buffer.startsWith('/') || this.buffer.includes('\n')) return [];
+    if(this.buffer==='/')return primaryCommands;
     return [...chatCommands, '/status', '/verbose', '/connect', '/diff'].filter((v,i,a)=>a.indexOf(v)===i && v.startsWith(this.buffer));
   }
   choose(label, choices, {signal} = {}) {

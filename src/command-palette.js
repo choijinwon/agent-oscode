@@ -1,3 +1,4 @@
+export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
   ['/states fix ', '실패 확인 → AI 수정 → 동일 조건 재검증·전후 보고서'],
   ['/states record ', '화면 클릭·입력 녹화와 검증 조건 선택'],
@@ -23,6 +24,7 @@ export const commandPalette = [
   ['/copy', '마지막 답변 복사 · F6'], ['/copy code', '코드 블록만 복사 · F7'], ['/help', '도움말'], ['/exit', '종료']
 ];
 export function searchCommands(query) {
+  if(!query.trim()||query.trim()==='/')return primaryCommands.map(command=>commandPalette.find(item=>item[0]===command));
   const words = query.trim().toLowerCase().split(/\s+/);
   return commandPalette.filter(item => words.every(word => item.join(' ').toLowerCase().includes(word)));
 }
