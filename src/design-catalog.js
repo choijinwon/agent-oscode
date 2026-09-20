@@ -2,6 +2,7 @@ import {themeCss,defaultTheme} from './design-theme.js';
 import {mobileCatalog,mobileMarkup,mobileStyles} from './design-mobile.js';
 import {adminCatalog,adminMarkup,adminStyles} from './design-admin.js';
 import {designMotionStyles} from './design-motion.js';
+import {patternCatalog,patternMarkup,patternStyles} from './design-patterns.js';
 export const designCatalog=[
  {id:'button',name:'액션 버튼',group:'기본',description:'중요한 작업을 위한 버튼'},
  {id:'form',name:'입력 폼',group:'입력',description:'이메일 검증과 제출 이벤트'},
@@ -15,7 +16,7 @@ export const designCatalog=[
  {id:'search-results',name:'검색 + 결과 목록',group:'화면 조합',description:'검색어·빈 결과·결과 개수'},
  {id:'settings-form',name:'설정 화면',group:'화면 조합',description:'계정·알림 설정 폼'},
  {id:'login-form',name:'로그인 화면',group:'화면 조합',description:'이메일·비밀번호·검증 상태'},
- ...mobileCatalog, ...adminCatalog
+ ...mobileCatalog, ...adminCatalog, ...patternCatalog
 ];
 const field=(label,name,type='text')=>`<label for="__id__-${name}">${label}</label><input id="__id__-${name}" name="${name}" type="${type}" required autocomplete="${name==='email'?'email':type==='password'?'current-password':'off'}">`;
 const submit='<button type="submit" data-action="submit">저장하기</button><p class="oc-feedback" role="status" data-feedback></p>';
@@ -23,6 +24,7 @@ const form=(body,title='프로젝트 정보')=>`<form><h2>${title}</h2>${body}${
 export const designMarkup={
  ...mobileMarkup,
  ...adminMarkup,
+ ...patternMarkup,
  button:'<button type="button" data-action="primary">변경 사항 저장</button>',
  form:form(field('이름','name')+field('이메일','email','email')),
  checkbox:'<label class="oc-check"><input type="checkbox" name="updates"> 새로운 소식을 이메일로 받기</label><p class="oc-muted">언제든지 설정에서 변경할 수 있습니다.</p>',
@@ -46,7 +48,7 @@ export function designAction(event,emit=()=>{}){
   if(tooltip&&!(event.relatedTarget instanceof Node&&tooltip.contains(event.relatedTarget)))tooltip.removeAttribute('data-dismissed');return;
  }
  if(event.type==='submit'){
-  if(!(origin instanceof HTMLFormElement)||origin.getAttribute('method')==='dialog')return;
+  if(!(origin instanceof HTMLFormElement)||origin.getAttribute('method')==='dialog'||origin.hasAttribute('data-step-form'))return;
   event.preventDefault();const feedback=root.querySelector('[data-feedback]');if(feedback)feedback.textContent='입력을 확인했습니다. 실제 저장은 앱에서 연결하세요.';
   emit({type:'submit',form:origin});return;
  }
@@ -80,4 +82,4 @@ export const designStyles=`
 .oc-design .oc-table-scroll{overflow:auto}.oc-design table{border-collapse:collapse;width:100%;text-align:left}.oc-design caption{text-align:left;font-weight:700;padding:0 0 14px}.oc-design th,.oc-design td{padding:12px;border-bottom:1px solid var(--oc-border);white-space:nowrap}.oc-design .oc-badge{padding:4px 8px;border-radius:99px;background:var(--oc-background);font-size:12px}.oc-design .oc-results{list-style:none;padding:0;margin:0}.oc-design .oc-results li{padding:14px 0;border-top:1px solid var(--oc-border)}.oc-design .oc-feedback{color:var(--oc-muted)}
 `;
 export function previewMarkup(id,uid='preview'){if(!Object.hasOwn(designMarkup,id))throw Error('알 수 없는 디자인');return designMarkup[id].replaceAll('__id__',uid);}
-export function designCss(tokens=defaultTheme,scope="",mobile=false,admin=false){return `.oc-design${scope?`[data-design="${scope}"]`:""}{${themeCss(tokens)}}\n${designStyles}${designMotionStyles}${mobile?mobileStyles:''}${admin?adminStyles:''}`;}
+export function designCss(tokens=defaultTheme,scope="",mobile=false,admin=false,interaction=false){return `.oc-design${scope?`[data-design="${scope}"]`:""}{${themeCss(tokens)}}\n${designStyles}${designMotionStyles}${mobile?mobileStyles:''}${admin?adminStyles:''}${interaction?patternStyles:''}`;}
