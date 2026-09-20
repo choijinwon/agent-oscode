@@ -43,6 +43,8 @@ OpenCode의 여러 모델 연결 방식, Pi의 작고 분리된 실행 코어, C
 
 `/design erp react`는 회계 전표 조회 테이블과 편집형 그리드를 제공합니다. 보기 저장·열 표시·행 간격·CSV, 20단계 되돌리기/다시 실행·오류 이동, 회사·통화별 합계·엑셀 셀 붙여넣기·차대변 검증을 지원합니다. SAP 서버 연결·실제 전기는 앱에서 구현합니다. [ERP 가이드](docs/design-studio.md#회계erp-테이블과-그리드).
 
+`/design theme component react src/components/DesignTheme.jsx`로 공통 스타일 컴포넌트를 생성합니다. 같은 DesignTheme을 페이지마다 재사용하고 `tokens`로 필요한 색상·모서리만 바꿀 수 있습니다. Vue·Angular·Svelte도 지원합니다. [공통 스타일 가이드](docs/design-studio.md#공통-스타일-컴포넌트와-페이지별-재사용).
+
 `/design code`로 확인한 뒤 `/design apply src/components/Profile.jsx`로 코드·CSS를 생성합니다. 앱 import와 데이터 연결은 이어서 수행합니다. 갤러리는 공통 HTML 미리보기이며 팀 코드를 실행하지 않습니다. [사용법·호환 버전·검증 범위](docs/design-studio.md). **npm 0.10.0에는 아직 포함되지 않습니다.**
 
 ## 프론트엔드 토큰 절약과 A/B 비교

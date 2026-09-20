@@ -305,6 +305,104 @@ AI의 `design_recipe` 도구도 기본 디자인에 `motion: "auto" | "reduced" 
 
 컴포넌트는 네이티브 DOM이 입력 상태를 관리하는 출발점입니다. 앱의 폼 라이브러리나 controlled props가 필요하면 프로젝트 방식에 맞게 확장하세요. 선언된 프레임워크와 최소 버전만 확인하며 패키지 설치·업그레이드는 수행하지 않습니다. 복합 버전 범위·별칭은 자동 판단하지 않습니다.
 
+## 공통 스타일 컴포넌트와 페이지별 재사용
+
+공통 스타일은 한 번 생성한 **DesignTheme** 컴포넌트에서 관리합니다. 같은 버튼·폼·테이블을 여러 페이지에서 import하고, 페이지나 일부 영역을 DesignTheme으로 감싸 색상·글꼴·모서리·간격을 지정하세요. React·Vue·Angular·Svelte 모두 지원하며 별도 스타일 라이브러리는 설치하지 않습니다.
+
+```text
+/design theme code react
+/design theme component react src/components/DesignTheme.jsx
+/design select react/button
+/design apply src/components/DesignButton.jsx
+```
+
+출력 폴더는 먼저 만드세요. 코드 보기 명령은 PLAN에서도 사용할 수 있으며 생성은 BUILD와 기존 쓰기 승인을 따릅니다. 이미 있는 파일은 덮어쓰지 않습니다. Vue는 `vue .../DesignTheme.vue`, Angular는 `angular .../DesignTheme.ts`, Svelte는 `svelte .../DesignTheme.svelte`로 생성합니다.
+
+| 적용 범위 | 사용 방법 |
+| --- | --- |
+| 모든 페이지의 공통 스타일 | 동일한 DesignTheme을 import. 생성된 DesignTheme.css의 기본 토큰을 한 곳에서 수정 |
+| 한 페이지 | `tokens`에 그 페이지에서 바꿀 값만 전달 |
+| 페이지 안의 특정 컴포넌트 | DesignTheme을 중첩. 생략한 값은 부모 테마에서 상속 |
+| 공통 스타일로 복원 | 해당 토큰을 객체에서 제거하거나 `tokens={}` 전달. 중첩된 경우 부모로 복원 |
+
+`tokens`는 기존 11개 디자인 토큰의 부분 객체입니다. 값은 단순 CSS 색상·길이·글꼴만 허용하며 임의 CSS나 URL은 거절합니다. 변경 시 객체를 새로 전달하세요. 밝은 포인트 컬러로 바꿀 때는 `accentText`도 함께 지정해 글자 대비를 확인하세요.
+
+이 순서로 적용됩니다: **가장 가까운 영역의 토큰 → 부모 테마 → 공통 CSS 기본값 → 개별 컴포넌트의 생성 기본값**. 테마로 감싸지 않은 디자인과 다른 페이지에는 영향을 주지 않습니다. 버튼의 Solid/Soft/Outline·크기·모션은 각 디자인의 선택값을 유지합니다.
+
+### 프레임워크별 페이지 예시
+
+아래는 페이지 전용 색상과 모서리를 설정하고, 내부 버튼 하나의 색상만 다시 바꾸는 예시입니다. import 경로는 페이지 위치에 맞게 조정하세요. Angular의 각 버튼에는 고유한 id가 필요합니다.
+
+#### React
+
+```jsx
+import DesignTheme from './components/DesignTheme.jsx';
+import DesignButton from './components/DesignButton.jsx';
+
+export default function Page() {
+ return <DesignTheme tokens={{ accent: '#4338ca', radius: '20px' }}>
+  <DesignButton />
+  <DesignTheme tokens={{ accent: '#0f766e' }}>
+   <DesignButton />
+  </DesignTheme>
+ </DesignTheme>;
+}
+```
+
+#### Vue
+
+```vue
+<script setup>
+import DesignTheme from './components/DesignTheme.vue';
+import DesignButton from './components/DesignButton.vue';
+</script>
+<template>
+ <DesignTheme :tokens="{ accent: '#4338ca', radius: '20px' }">
+  <DesignButton />
+  <DesignTheme :tokens="{ accent: '#0f766e' }"><DesignButton /></DesignTheme>
+ </DesignTheme>
+</template>
+```
+
+#### Angular
+
+```ts
+import { Component } from '@angular/core';
+import { DesignThemeComponent } from './components/DesignTheme';
+import { DesignButtonComponent } from './components/DesignButton';
+
+@Component({
+ selector: 'app-page', standalone: true,
+ imports: [DesignThemeComponent, DesignButtonComponent],
+ template: `<oscode-design-theme [tokens]="{accent:'#4338ca',radius:'20px'}">
+  <oscode-design-button id="page-primary" />
+  <oscode-design-theme [tokens]="{accent:'#0f766e'}">
+   <oscode-design-button id="page-secondary" />
+  </oscode-design-theme>
+ </oscode-design-theme>`
+})
+export class PageComponent {}
+```
+
+#### Svelte
+
+```svelte
+<script>
+import DesignTheme from './components/DesignTheme.svelte';
+import DesignButton from './components/DesignButton.svelte';
+</script>
+<DesignTheme tokens={{ accent: '#4338ca', radius: '20px' }}>
+ <DesignButton />
+ <DesignTheme tokens={{ accent: '#0f766e' }}><DesignButton /></DesignTheme>
+</DesignTheme>
+```
+
+갤러리 하단의 **공통 스타일 · 페이지별로 재사용하기**에서 색상 적용 범위를 비교하고 생성 명령·페이지 코드를 복사할 수 있습니다. AI도 `design_recipe`의 `component: "theme"`로 코드와 CSS를 나눠 읽을 수 있습니다.
+
+테마 생성 시 프로젝트 토큰을 CSS에 복사합니다. 이후 `/design theme set`이 생성된 파일을 자동 수정하지는 않습니다. 공통 스타일을 바꾸려면 실제 앱의 DesignTheme.css를 수정하세요. 기존 팀 라이브러리에 이 두 파일을 등록해 공유할 수도 있지만, 레지스트리는 자동 동기화되지 않는 스냅샷입니다.
+
+이 기능은 **이번 버전부터 생성한 OSCODE 디자인**에 적용됩니다. 이전 생성 파일·MUI·Ant Design·기존 앱 CSS는 자동 변환하지 않습니다. 기존 디자인은 새 파일과 비교해 토큰 상속 선언을 적용하세요. 래퍼는 div 하나를 추가하며 페이지의 grid·flex·여백 배치는 앱에서 지정합니다. CSS 변수 상속 범위 바깥으로 이동한 포털에는 해당 테마를 명시적으로 연결해야 합니다.
+
 ## 프로젝트 디자인 토큰
 
 ```text
@@ -342,7 +440,7 @@ AI의 `design_recipe` 도구도 기본 디자인에 `motion: "auto" | "reduced" 
 /design gallery react
 ```
 
-레지스트리는 원본 코드·CSS의 스냅샷이며 `.oscode/design-registry.json`에 저장합니다. 최대 24개, 항목당 코드 64,000자·CSS 16,000자, 파일 전체 512 KB까지 지원합니다. 같은 이름의 중복 등록·가져오기는 거절합니다. 원본이 바뀌어도 자동 동기화되지 않습니다.
+레지스트리는 원본 코드·CSS의 스냅샷이며 `.oscode/design-registry.json`에 저장합니다. 최대 24개, 항목당 코드 64,000자·CSS 18,000자, 파일 전체 512 KB까지 지원합니다. 같은 이름의 중복 등록·가져오기는 거절합니다. 원본이 바뀌어도 자동 동기화되지 않습니다.
 
 등록한 코드와 CSS의 SHA-256 해시를 검사합니다. 해시는 내용 손상 검사용이며 작성자 신뢰를 인증하지 않습니다. React 팀 컴포넌트는 `.jsx`·`.tsx`를 보존합니다. 등록한 CSS의 정적 `import`, Angular `styleUrls`, Vue/Svelte `<style src>` 참조는 새 CSS 파일명으로 연결합니다. 그 외 패키지·이미지·상대 import는 복사하지 않으므로 확인해야 합니다. 팀 코드의 버전별 호환성은 앱에서 검증하세요.
 

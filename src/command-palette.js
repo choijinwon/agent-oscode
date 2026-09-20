@@ -1,5 +1,7 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
+  ['/design theme code ', '공통 스타일·페이지별 사용 코드 보기'],
+  ['/design theme component ', '여러 페이지에서 재사용할 스타일 컴포넌트 생성'],
   ['/design motion ', '인터랙션 강도 auto·reduced·off 선택'],
   ['/design erp ', '회계 전표 조회·셀 편집·차대변 합계·초안 검증'],
   ['/design interact ', '아코디언·작업 메뉴·되돌리기·단계 폼·선택·순서 변경'],

@@ -1,3 +1,4 @@
+import {themeComponentRecipe,applyThemeComponent} from './design-theme-component.js';
 import {designCatalog} from './design-catalog.js';
 import {projectTheme,validateTheme,updateDesignFile,exportTokens,importTokens} from './design-theme.js';
 import {designRecipe,validateSelection,applyDesign,designFrameworks} from './design-recipes.js';
@@ -13,6 +14,8 @@ export const designHelp=`/design gallery [react|vue|angular|svelte] · 디자인
 /design motion auto|reduced|off · 인터랙션 강도
 /design code · 선택한 코드 확인
 /design apply 경로 · 코드·CSS 새 파일 생성
+/design theme code 프레임워크 · 공통 스타일 컴포넌트 코드 보기
+/design theme component 프레임워크 경로 · 페이지에서 재사용할 스타일 컴포넌트 생성
 /design theme · 프로젝트 테마 후보 보기
 /design theme set {"accent":"#0f766e","radius":"12px"}
 /design theme import 파일.json · DTCG 부분 형식 읽기
@@ -23,7 +26,7 @@ export const designHelp=`/design gallery [react|vue|angular|svelte] · 디자인
 /design use 이름 · 팀 컴포넌트 선택`;
 export async function designCatalogSummary(tools,signal){
  const theme=await projectTheme(tools,signal),registry=await readRegistry(tools);
- return {components:designCatalog,team:registry.items.map(({name,framework,description,usage,hash})=>({name,framework,description,usage,hash})),theme,frameworks:Object.keys(designFrameworks),next:'Use /design gallery to preview or design_recipe to inspect a native starter. Read existing local components first; do not create duplicates.'};
+ return {components:designCatalog,team:registry.items.map(({name,framework,description,usage,hash})=>({name,framework,description,usage,hash})),theme,frameworks:Object.keys(designFrameworks),next:'For shared page styles, read design_recipe component=theme or /design theme code framework; generate one DesignTheme and reuse it with partial tokens per page. Use /design gallery to preview or design_recipe to inspect a native starter. Read existing local components first; do not create duplicates.'};
 }
 export class DesignStudio{
  constructor(tools){this.tools=tools;this.selection=null;this.team=null;}
@@ -57,6 +60,18 @@ export class DesignStudio{
    return `생성: ${r.created.join(', ')}\n${r.guidance}\n앱 import·데이터 연결·실제 프레임워크 렌더링 검증은 다음 단계입니다.`;
   }
   if(action==='theme'){
+   const component=/^(code|component)\s+(react|vue|angular|svelte)(?:\s+([\s\S]+))?$/.exec(rest);
+   if(component){
+    if(component[1]==='code'){
+     if(component[3])throw Error('/design theme code 프레임워크');
+     const r=themeComponentRecipe(component[2],(await projectTheme(this.tools,signal)).tokens);
+     return `${r.code}\n/* ${r.cssFile} */\n${r.css}\n페이지 사용 예시 · import 경로는 앱에 맞게 조정하세요\n${r.usage}\n${r.guidance}`;
+    }
+    if(!component[3])throw Error('/design theme component react src/components/DesignTheme.jsx');
+    const r=await applyThemeComponent(this.tools,component[2],component[3],signal);
+    return `공통 스타일 생성: ${r.created.join(', ')}\n같은 컴포넌트를 페이지마다 import하세요. 공통 값은 생성된 CSS에서, 페이지별 값은 tokens 속성에서 관리합니다.\n${r.guidance}`;
+   }
+   if(/^(code|component)(?:\s|$)/.test(rest))throw Error('/design theme code 프레임워크 · /design theme component 프레임워크 경로');
    const match=/^(set|import|export)\s+([\s\S]+)$/.exec(raw.trim().slice(5).trim());
    if(!match)return JSON.stringify(await projectTheme(this.tools,signal),null,2);
    if(match[1]==='export'){const theme=await projectTheme(this.tools,signal);await this.tools.perform('write_file',{path:match[2],content:JSON.stringify(exportTokens(theme.tokens),null,2)+'\n'},signal);return '디자인 토큰 내보내기: '+match[2];}

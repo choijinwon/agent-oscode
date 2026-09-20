@@ -1,18 +1,11 @@
+import {validateDesignTokens as validateTheme} from './design-token-values.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {sessionDirectory} from './session.js';
 export const defaultTheme={accent:'#0f766e',accentText:'#ffffff',surface:'#ffffff',background:'#f6f8fa',text:'#202b36',muted:'#626f7c',border:'#dce2e8',danger:'#b42318',radius:'12px',spacing:'16px',font:'Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Noto Sans KR, Segoe UI, sans-serif'};
 export const darkTheme={...defaultTheme,surface:'#18212c',background:'#101720',text:'#edf2f7',muted:'#a7b3c2',border:'#344253',accent:'#62d5b6',accentText:'#0d241c',danger:'#ffaaa2'};
-export function validateTheme(value){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(defaultTheme,k)))throw Error('지원하는 디자인 토큰 이름을 확인하세요.');
- for(const [key,v]of Object.entries(value)){
-  if(typeof v!=='string'||v.length>120)throw Error(`잘못된 ${key}`);
-  const valid=key==='font'?/^[a-zA-Z0-9 ,'"-]+$/.test(v)&&v.trim():['radius','spacing'].includes(key)?/^(?:0|\d+(?:\.\d+)?(?:px|rem|em))$/.test(v)&&parseFloat(v)<=100:/^(?:#[\da-fA-F]{3,4}|#[\da-fA-F]{6}|#[\da-fA-F]{8}|(?:rgb|hsl)a?\([\d\s.,%/+\-deg]+\)|oklch\([\d\s.%/+\-]+\)|transparent|currentColor|black|white)$/.test(v);
-  if(!valid)throw Error(`${key}: 단순 색상·길이·글꼴 값만 지원합니다.`);
- }
- return value;
-}
+export {validateDesignTokens as validateTheme} from './design-token-values.js';
 export async function readDesignFile(tools,name,fallback){
  const dir=path.join(tools.root,'.oscode');
  try{if((await fs.lstat(dir)).isSymbolicLink())throw Error('.oscode must not be a symlink.');}catch(e){if(e.code==='ENOENT')return fallback;throw e;}
@@ -52,7 +45,7 @@ export async function projectTheme(tools,signal){
  const saved=await readDesignFile(tools,'design-theme.json',{});validateTheme(saved);
  return {tokens:{...defaultTheme,...detected,...saved},origins,overrides:Object.keys(saved),note:'첫 40개 CSS의 단순 :root/@theme 값 후보입니다. cascade·조건부 테마·var 참조를 해석하지 않습니다. 생성 CSS는 컴포넌트 범위에만 적용됩니다.'};
 }
-export function themeCss(tokens){validateTheme(tokens);return Object.entries({...defaultTheme,...tokens}).map(([key,value])=>`--oc-${key}:${value}`).join(';');}
+export function themeCss(tokens,inherit=false){validateTheme(tokens);return Object.entries({...defaultTheme,...tokens}).map(([key,value])=>`--oc-${key}:${inherit?`var(--oc-theme-${key},${value})`:value}`).join(';');}
 export function exportTokens(tokens){
  validateTheme(tokens);const group={};
  for(const [key,value]of Object.entries(tokens)){
