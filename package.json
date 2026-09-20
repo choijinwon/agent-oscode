@@ -66,6 +66,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@openai/codex": "0.155.0"
   }
 }

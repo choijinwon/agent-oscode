@@ -2,7 +2,7 @@ import {primaryCommands} from './command-palette.js';
 import readline from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
-export const chatCommands = ['/states ', '/states run ', '/states record ', '/states fix ', '/architecture', '/review', '/review show', '/summary', '/handoff', '/handoff copy', '/map', '/approval', '/style', '/skills', '/skills list', '/skills off', '/preview', '/workspace', '/cwd', '/cd ', '/ocr ', '/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan off', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
+export const chatCommands = ['/mcp', '/mcp connect ', '/mcp use ', '/mcp off', '/states ', '/states run ', '/states record ', '/states fix ', '/architecture', '/review', '/review show', '/summary', '/handoff', '/handoff copy', '/map', '/approval', '/style', '/skills', '/skills list', '/skills off', '/preview', '/workspace', '/cwd', '/cd ', '/ocr ', '/context', '/context add ', '/context remove ', '/context clear', '/context history off', '/context history on', '/diagnose', '/fix', '/settings', '/key', '/key status', '/key remove', '/frontend', '/files', '/paste', '/draft', '/send', '/clear', '/copy', '/copy code', '/plan', '/plan off', '/plan show', '/apply', '/status', '/verbose', '/help', '/usage', '/exit'];
 export function completeCommand(line) {
   if (!line.startsWith('/')) return [[], line];
   return [line==='/'?primaryCommands:chatCommands.filter(command => command.startsWith(line)), line];

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {McpHub} from '../src/mcp.js';
 import {UiRepair} from '../src/ui-repair.js';
 import {recordUi} from '../src/ui-recorder.js';
 import {runStateBrowser} from '../src/state-browser.js';
@@ -70,6 +71,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   oscode --resume latest             마지막 세션 재개
 
 대화 기능:
+  /mcp                             MCP 서버 등록·연결·도구 선택
   /states record URL               화면 조작과 검증 조건 녹화
   /states run URL 파일.json         저장한 시나리오 검증
   /states fix URL 파일.json         실패 확인·AI 수정·동일 조건 재검증
@@ -326,6 +328,8 @@ async function main(raw = process.argv.slice(2), host) {
       finally { if (screen) screen.panel = '대화'; }
     }
   });
+  tools.mcp=new McpHub(tools);
+  if(host)tools.mcp.runExclusive=(run,signal)=>host.exclusive(root,run,signal);
   const originalPerform=tools.perform.bind(tools);
   tools.perform=async(name,input,signal)=>{
     if(screen&&screen.reviewLabel&&['write_file','edit_file','shell','verify_project'].includes(name)){screen.reviewLabel='작업 변경 · 재검사 필요';screen.render();}
@@ -410,6 +414,11 @@ async function main(raw = process.argv.slice(2), host) {
       if (!input.trim()) continue;
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
+      if(input==='/mcp'||input.startsWith('/mcp ')){
+        active=new AbortController();screen?.setStage('MCP 연결 관리');
+        try{print(await tools.mcp.command(input.slice(4),active.signal));}catch(error){print(`MCP: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
+      }
       if (input === '/exit') break;
       if(input==='/preview'||input.startsWith('/preview ')) {
         try {
@@ -700,7 +709,7 @@ async function main(raw = process.argv.slice(2), host) {
       if (connectionStatus()) { print('\n  OSCODE\n\n  아직 모델이 연결되지 않았습니다. /settings → /key 순서로 설정하세요.\n  로컬 탐색은 /files 또는 /frontend로 바로 사용할 수 있습니다.'); continue; }
       await execute(input);
     }
-  } finally { autoPreview.close(); rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
+  } finally { await tools.mcp.close(); autoPreview.close(); rl?.close(); screen = null; process.removeListener('SIGINT', interrupt); }
 }
 async function run(){
  const args=process.argv.slice(2);

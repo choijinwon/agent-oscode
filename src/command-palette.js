@@ -1,5 +1,6 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
+  ['/mcp', '외부 MCP 서버 연결·도구 선택·해제'],
   ['/states fix ', '실패 확인 → AI 수정 → 동일 조건 재검증·전후 보고서'],
   ['/states record ', '화면 클릭·입력 녹화와 검증 조건 선택'],
   ['/states run ', '브라우저에서 시나리오 실행·실제 UI 상태 검증'],

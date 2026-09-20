@@ -133,6 +133,7 @@ export class WorkspaceTools {
   }
   async execute(name, input, signal) {
     try {
+      if(name.startsWith('mcp_')&&this.mcp)return await this.mcp.call(name,input,signal);
       this.validate(name, input);
       if (signal?.aborted) throw new Error('Cancelled.');
       const result = await this.perform(name, input, signal);
