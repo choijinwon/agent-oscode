@@ -1,5 +1,6 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
+  ['/design admin ', '관리자 대시보드·필터 테이블·사용자 초대 디자인'],
   ['/design gallery ', '디자인 갤러리·색상·크기·상태별 미리보기'],
   ['/design mobile ', '모바일 탭바·바텀시트·폼과 화면 크기 미리보기'],
   ['/design', '디자인 스튜디오·테마·팀 컴포넌트 사용법'],

@@ -19,5 +19,5 @@ for (const file of ['index.html', 'docs.html', 'robots.txt', 'sitemap.xml']) {
   if (preview && file === 'robots.txt') content = 'User-agent: *\nDisallow: /\n';
   await writeFile(path.join(output, file), content);
 }
-for (const file of ['style.css', 'app.js', 'design-studio.png', 'design-mobile.png']) await copyFile(path.join(source, file), path.join(output, file));
+for (const file of ['style.css', 'app.js', 'design-studio.png', 'design-mobile.png', 'design-admin.png']) await copyFile(path.join(source, file), path.join(output, file));
 console.log(`Built website ${version} for ${origin}${preview ? ' (noindex preview)' : ''}`);
