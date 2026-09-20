@@ -1,3 +1,4 @@
+import {installRoutes} from './ui-network.js';
 import { validateScenario, runScenario, captureKey, compareBaseline, auditAccessibility } from './ui-workflow.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -37,6 +38,7 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
       const context = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: 'reduce', serviceWorkers: 'block', acceptDownloads: false });
       try {
         if (scenario) await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+        const network=await installRoutes(context,url,scenario?.routes);
         const page = await context.newPage();
         page.setDefaultTimeout(10000);
         const result = { viewport: name, ...size, console: [], errors: [], requests: [], overflow: null, screenshot: null };
@@ -44,7 +46,7 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
         page.on('console', msg => { if (['error', 'warning'].includes(msg.type())) add(result.console, { type: msg.type(), text: msg.text().slice(0, 400), source: safeUrl(msg.location().url), line: msg.location().lineNumber }); });
         page.on('pageerror', error => add(result.errors, error.message.slice(0, 400)));
         page.on('requestfailed', request => add(result.requests, { url: safeUrl(request.url()), failure: request.failure()?.errorText?.slice(0, 160) }));
-        page.on('response', response => { if (response.status() >= 400) add(result.requests, { url: safeUrl(response.url()), status: response.status() }); });
+        page.on('response', response => { if (response.status() >= 400) add(result.requests, { url: safeUrl(response.url()), status: response.status(), simulated: network.isMocked(response.request()) }); });
         page.on('dialog', dialog => { dialog.dismiss().catch(() => {}); });
         try {
           const response = await page.goto(url, { waitUntil: 'load', timeout: 10000 });
@@ -80,12 +82,13 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
           try { const shot=path.join(dir, `${name}-failure.png`); await page.screenshot({path:shot,timeout:2000}); result.screenshot=shot; } catch {}
         }
         if (scenario) { result.trace = path.join(dir, `${name}-trace.zip`); await context.tracing.stop({ path: result.trace }); }
+        result.simulation=network.summary();
         report.results.push(result);
       } finally { await context.close(); }
     }
     if (signal?.aborted) throw new Error('Cancelled.');
-    report.findings = report.results.reduce((n, r) => n + (r.overflow?.pixels > 1 ? 1 : 0) + r.errors.length + r.requests.length + r.console.length + (r.scenario && !r.scenario.passed ? 1 : 0) + (r.visual?.changed ? 1 : 0) + (r.accessibility?.totalViolations || 0), 0);
-    report.incomplete = report.results.some(r => r.error);
+    report.findings = report.results.reduce((n, r) => n + (r.overflow?.pixels > 1 ? 1 : 0) + r.errors.length + r.requests.filter(item=>!item.simulated).length + r.console.length + (r.simulation?.enabled&&!r.simulation.complete?1:0) + (r.scenario && !r.scenario.passed ? 1 : 0) + (r.visual?.changed ? 1 : 0) + (r.accessibility?.totalViolations || 0), 0);
+    report.incomplete = report.results.some(r => r.error || (r.simulation?.enabled&&!r.simulation.complete));
     report.file = path.join(dir, 'report.json');
     await fs.writeFile(report.file, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
     return report;
@@ -93,6 +96,6 @@ export async function checkUi({ root, url, viewport = 'all', signal, scenario, b
 }
 export function uiSummary(report) {
   return JSON.stringify({ report: report.file, findings: report.findings, incomplete: report.incomplete,
-    results: report.results.map(r => ({ viewport: r.viewport, overflowPixels: r.overflow?.pixels, candidates: r.overflow?.candidates.slice(0, 3), errors: r.errors.slice(0, 2), console: r.console.slice(0, 2), requests: r.requests.slice(0, 2), screenshot: r.screenshot, scenario: r.scenario, trace: r.trace, visual: r.visual, accessibility: r.accessibility ? { totalViolations: r.accessibility.totalViolations, violations: r.accessibility.violations.slice(0, 2), incompleteRules: r.accessibility.incompleteRules } : undefined, ...(r.error ? { error: r.error } : {}) })),
+    results: report.results.map(r => ({ viewport: r.viewport, overflowPixels: r.overflow?.pixels, candidates: r.overflow?.candidates.slice(0, 3), errors: r.errors.slice(0, 2), console: r.console.slice(0, 2), requests: r.requests.slice(0, 2), screenshot: r.screenshot, scenario: r.scenario, simulation:r.simulation, trace: r.trace, visual: r.visual, accessibility: r.accessibility ? { totalViolations: r.accessibility.totalViolations, violations: r.accessibility.violations.slice(0, 2), incompleteRules: r.accessibility.incompleteRules } : undefined, ...(r.error ? { error: r.error } : {}) })),
     note: 'Bounded diagnostic summary; full report and screenshots are local. Findings are candidates, not proof of root cause. Rerun the affected viewport after fixes.' }, null, 2);
 }

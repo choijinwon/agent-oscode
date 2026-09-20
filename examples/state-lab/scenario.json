@@ -1,0 +1,27 @@
+{
+  "routes": [{
+    "path": "/api/items",
+    "method": "GET",
+    "responses": [
+      { "status": 503, "delayMs": 1500, "json": { "error": "test-unavailable" } },
+      { "status": 200, "json": [] },
+      { "status": 200, "json": [{ "name": "OSCODE 검증 완료" }] }
+    ]
+  }],
+  "steps": [
+    { "action": "click", "selector": "#load" },
+    { "action": "visible", "selector": "#loading" },
+    { "action": "disabled", "selector": "#load" },
+    { "action": "visible", "selector": "#error" },
+    { "action": "hidden", "selector": "#loading" },
+    { "action": "enabled", "selector": "#load" },
+    { "action": "click", "selector": "#load" },
+    { "action": "visible", "selector": "#empty" },
+    { "action": "hidden", "selector": "#error" },
+    { "action": "count", "selector": "#items li", "value": 0 },
+    { "action": "click", "selector": "#load" },
+    { "action": "text", "selector": "#items", "value": "OSCODE 검증 완료" },
+    { "action": "hidden", "selector": "#empty" },
+    { "action": "count", "selector": "#items li", "value": 1 }
+  ]
+}

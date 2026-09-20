@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {UiRepair} from '../src/ui-repair.js';
 import {recordUi} from '../src/ui-recorder.js';
 import {runStateBrowser} from '../src/state-browser.js';
 import {inspectStates, statesText} from '../src/frontend-states.js';
@@ -442,6 +443,24 @@ async function main(raw = process.argv.slice(2), host) {
           const result=await tools.execute('read_document',options,active.signal);print(result.content);
         } catch(error) { print(`문서 읽기 실패: ${error.message}`); }
         finally {active=null;screen?.setStage('대기');}
+        continue;
+      }
+      if(input==='/states fix'||input.startsWith('/states fix ')){
+        let flow;
+        try{
+          const match=/^\/states fix\s+(\S+)\s+(.+)$/.exec(input);
+          if(!match)throw Error('사용법: /states fix URL 시나리오.json');
+          active=new AbortController();screen?.setStage('수정 전 화면 검증 중');
+          flow=await new UiRepair(tools).begin(match[1],match[2],active.signal);
+          print(`${flow.label} · 보고서: ${flow.html}`);
+          if(flow.canFix){
+            const turn=await execute(flow.prompt(),null,false);
+            active=new AbortController();screen?.setStage('동일 조건 재검증 중');
+            await flow.finish(turn?.status==='done',active.signal);
+            print(`${flow.label}\n전후 보고서: ${flow.html}\n결과 데이터: ${flow.json}`);
+          }
+        }catch(error){print(`화면 수정 흐름 중단: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}
         continue;
       }
       if(input==='/states'||input.startsWith('/states ')){

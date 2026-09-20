@@ -13,10 +13,15 @@ export async function runStateBrowser(tools,input,signal){
  const rows=['# 실제 화면 동작 검증'];
  for(const result of report.results){
   const scenario=result.scenario;
-  const verdict=result.error?'검증 미완료':!scenario?'검증 미완료':!scenario.passed?'실패':!scenario.assertions?'확인 조건 없음':'지정한 조건 통과';
+  const verdict=(result.error||(result.simulation?.enabled&&!result.simulation.complete))?'검증 미완료':!scenario?'검증 미완료':!scenario.passed?'실패':!scenario.assertions?'확인 조건 없음':'지정한 조건 통과';
   rows.push(`\n${result.viewport} · ${verdict}`);
   for(const step of scenario?.steps||[])rows.push(`  ${step.passed?'✓':'✗'} ${step.step}. ${step.action} ${safe(step.selector)}`);
   if(scenario&&!scenario.passed)rows.push(`  ${scenario.plannedSteps-scenario.steps.length}개 후속 단계 미실행`);
+  if(result.simulation?.enabled){
+   rows.push('  테스트용 API 응답 사용 · 실제 서버 응답 검증 아님');
+   for(const item of result.simulation.coverage)rows.push(`  ${item.method} ${safe(item.path)} · 요청 ${item.requested}회 / 계획 응답 ${item.planned}개`);
+   if(!result.simulation.complete)rows.push('  응답 재현 미완료 · 사용하지 않은 응답 또는 실행 오류 확인');
+  }
   if(result.error)rows.push(`  오류: ${safe(result.error)}`);
   if(result.screenshot)rows.push(`  화면: ${safe(result.screenshot)}`);
   if(result.trace)rows.push(`  실행 기록: ${safe(result.trace)}`);

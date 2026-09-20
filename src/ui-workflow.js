@@ -1,10 +1,12 @@
+import {validateRoutes} from './ui-network.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { sessionDirectory } from './session.js';
 
 export function validateScenario(data) {
-  if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => k !== 'steps') || !Array.isArray(data.steps) || !data.steps.length || data.steps.length > 20) throw new Error('Scenario requires 1–20 steps.');
+  if (!data || Array.isArray(data) || typeof data !== 'object' || Object.keys(data).some(k => !['steps','routes'].includes(k)) || !Array.isArray(data.steps) || !data.steps.length || data.steps.length > 20) throw new Error('Scenario requires 1–20 steps.');
+  validateRoutes(data.routes);
   const actions = { click: [], fill: ['value'], press: ['key'], visible: [], hidden: [], disabled: [], enabled: [], count: ['value'], text: ['value'] };
   for (const step of data.steps) {
     if (!step || !Object.hasOwn(actions, step.action)) throw new Error('Actions: click, fill, press, visible, hidden, disabled, enabled, count, text.');
