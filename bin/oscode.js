@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {recordUi} from '../src/ui-recorder.js';
 import {runStateBrowser} from '../src/state-browser.js';
 import {inspectStates, statesText} from '../src/frontend-states.js';
 import {architectureReport} from '../src/architecture.js';
@@ -446,7 +447,8 @@ async function main(raw = process.argv.slice(2), host) {
       if(input==='/states'||input.startsWith('/states ')){
         active=new AbortController();screen?.setStage('UI 상태 분석 중');
         try{const target=input.slice(7).trim();
-          if(target==='run'||target.startsWith('run ')){screen?.setStage('브라우저 상태 검증 중');print(await runStateBrowser(tools,target,active.signal));}
+          if(target==='record'||target.startsWith('record ')){screen?.setStage('브라우저 녹화 중');print(await recordUi(tools,target.slice(6).trim(),active.signal));}
+          else if(target==='run'||target.startsWith('run ')){screen?.setStage('브라우저 상태 검증 중');print(await runStateBrowser(tools,target,active.signal));}
           else print(statesText(await inspectStates(tools,target,active.signal)));
         }
         catch(error){print(`UI 상태 분석 중단: ${error.message}`);}
