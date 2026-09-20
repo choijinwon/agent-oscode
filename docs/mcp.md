@@ -1,6 +1,6 @@
 # MCP 연결 (최신 소스)
 
-OSCODE가 명시적으로 연결한 로컬 stdio MCP 서버의 도구를 호출할 수 있습니다. 공식 TypeScript SDK v1의 Client/StdioClientTransport를 사용합니다. HTTP/SSE, OAuth, 이미지·파일 다운로드, 서버 요청에 의한 sampling/elicitation은 지원하지 않습니다. Figma·GitHub 자체 연결이 내장된 것은 아닙니다. 해당 서비스가 지원하는 별도 stdio 서버와 인증 구성이 필요합니다.
+OSCODE는 로컬 stdio와 원격 Streamable HTTP MCP 서버에 연결합니다. 공식 TypeScript SDK v1을 사용하며 원격 서버는 공개 연결, 환경변수 Bearer 토큰, 브라우저 OAuth(PKCE)를 지원합니다. 구형 HTTP+SSE 전용 서버, 이미지·파일 다운로드, 서버 요청에 의한 sampling/elicitation은 지원하지 않습니다. 서비스별 MCP 주소와 인증 지원 조건은 해당 제공자의 안내를 확인하세요.
 
 ## 먼저 예제로 확인
 
@@ -18,7 +18,7 @@ OSCODE 소스 프로젝트에서 실행합니다.
 
 - `/mcp` 또는 `/mcp list`: 등록 서버의 연결 상태와 선택 도구
 - `/mcp add 이름 JSON`: 서버 등록. 같은 이름을 덮어쓰지 않습니다.
-- `/mcp connect 이름`: 실행 승인 후 프로세스를 시작하고 도구 목록 조회
+- `/mcp connect 이름`: 승인 후 로컬 프로세스 또는 원격 서버에 연결하고 도구 목록 조회
 - `/mcp use 이름 도구명`: 현재 세션에서 AI에 제공할 도구 선택
 - `/mcp off`: 선택한 도구 전부 해제 (서버 연결 유지)
 - `/mcp disconnect 이름`: 연결 종료 및 해당 서버 도구 선택 해제
@@ -53,3 +53,27 @@ OSCODE 소스 프로젝트에서 실행합니다.
 이 기능은 npm 0.10.0 이후 소스에 추가됐습니다.
 
 공식 SDK 문서: https://ts.sdk.modelcontextprotocol.io/client
+
+
+## 원격 HTTP와 OAuth
+
+아래 주소는 예시입니다. 실제 서비스의 **Streamable HTTP MCP 엔드포인트**로 바꾸세요.
+
+```text
+/mcp add remote {"url":"https://mcp.example.com/mcp","oauth":true,"readOnlyTools":["search"]}
+/mcp connect remote
+/mcp use remote search
+```
+
+연결 승인을 받으면 인증이 필요한 서버에서 브라우저 로그인 화면이 열립니다. 로그인 후 터미널로 돌아오면 도구 목록을 표시합니다. OAuth 공개 클라이언트, PKCE S256, 로컬 루프백 콜백을 지원해야 합니다. 서버가 동적 클라이언트 등록을 지원하지 않으면 사전 등록한 공개 클라이언트 `clientId`를 설정에 추가하세요. 콜백은 `http://127.0.0.1:<임의 포트>/callback`입니다. 고정 콜백 포트만 허용하거나 client secret이 필수인 서버는 이 버전에서 지원하지 않습니다.
+
+인증 대기는 3분이며 Ctrl+C로 취소할 수 있습니다. 토큰과 PKCE 값은 메모리에서만 보관하고 연결 해제 시 지웁니다. 재시작하면 다시 인증합니다. 토큰 갱신은 SDK가 처리하며 다시 사용자 인증이 필요해지면 연결을 종료하고 재연결하세요.
+
+Bearer 토큰을 사용하는 서버는 터미널에 환경변수를 설정한 후 이름만 등록합니다. OAuth와 동시에 지정할 수 없습니다.
+
+```text
+/mcp add tokenserver {"url":"https://mcp.example.com/mcp","tokenEnv":"MY_MCP_TOKEN"}
+/mcp connect tokenserver
+```
+
+인증이 필요 없는 서버는 `url`만 지정합니다. HTTPS가 기본이며 HTTP는 localhost·127.0.0.1·::1 테스트 서버에만 허용합니다. URL의 사용자 정보·쿼리·fragment와 HTTP 리다이렉트는 거부합니다. 인증 서버 검색 요청도 같은 전송 보안 정책을 적용합니다. MCP는 별도 외부 연결이므로 폐쇄망 LLM 설정이 MCP 통신까지 차단하지는 않습니다.
