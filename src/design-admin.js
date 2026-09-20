@@ -46,5 +46,12 @@ export const adminStyles = `
 .oc-design .oc-admin-table-scroll th .oc-admin-person{padding:4px 0;background:transparent;border-color:transparent;color:var(--oc-accent);text-decoration:underline;text-underline-offset:3px;min-height:44px}
 .oc-design dialog.oc-admin-detail{position:fixed;inset:0 0 0 auto;margin:0;width:min(420px,100%);max-width:100%;height:100dvh;max-height:100dvh;overflow-y:auto;overscroll-behavior:contain;border:0;border-left:1px solid var(--oc-border);border-radius:20px 0 0 20px;padding:24px;box-shadow:-12px 0 40px #0002}
 .oc-design .oc-admin-detail header{display:flex;align-items:start;justify-content:space-between;gap:12px;flex-wrap:wrap}.oc-design .oc-admin-detail h2{margin:8px 0}.oc-design .oc-admin-detail dt{font-size:12px;color:var(--oc-muted);margin-top:24px}.oc-design .oc-admin-detail dd{margin:6px 0;overflow-wrap:anywhere}
+.oc-design[data-admin=true] button[data-admin-reset],.oc-design[data-admin=true] button[data-admin-detail-close]{background:var(--oc-surface);border-color:var(--oc-border);color:var(--oc-muted)}
+.oc-design .oc-admin-card{background:var(--oc-surface);box-shadow:0 2px 4px color-mix(in srgb,var(--oc-text) 3%,transparent)}
+.oc-design .oc-admin-number{font-variant-numeric:tabular-nums;font-weight:650}
+.oc-design .oc-admin-metrics .oc-admin-card h3{color:var(--oc-muted);font-size:12px;font-weight:500}
+.oc-design .oc-admin-table-scroll{border:1px solid var(--oc-border);border-radius:10px}.oc-design .oc-admin-table-scroll caption{padding:12px 16px;background:var(--oc-surface)}
+.oc-design .oc-admin-table-scroll th .oc-admin-person{text-decoration:none;font-weight:600}
+.oc-design .oc-admin-table-scroll th .oc-admin-person:hover{text-decoration:underline}
 @container(max-width:520px){.oc-design .oc-admin-body{padding:16px}.oc-design .oc-admin-metrics{grid-template-columns:1fr}.oc-design .oc-admin-layout{grid-template-columns:1fr}.oc-design .oc-admin-nav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--oc-border)}.oc-design .oc-admin-nav>span{width:100%}.oc-design .oc-admin-timeline li{flex-wrap:wrap}.oc-design .oc-admin-timeline li>div{flex-basis:65%}}
 `;

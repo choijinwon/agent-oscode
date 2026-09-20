@@ -88,6 +88,7 @@ node bin/oscode.js</code></pre><button data-copy="docs-install" aria-label="명�
   <p class="code-label">입력 그리드 생성 · 출력 폴더는 미리 만드세요</p><div class="code"><pre id="design-erp-apply"><code>/design select react/erp-journal
 /design code
 /design apply src/components/JournalGrid.jsx</code></pre><button data-copy="design-erp-apply" aria-label="전표 그리드 생성 명령어 복사">복사</button></div>
+  <h3>정돈된 업무 화면</h3><p>주요 작업 버튼과 보조 버튼을 구분하고, 상태 배지·금액 정렬·합계 카드로 읽는 순서를 정리했습니다. 프로젝트 테마를 유지하며 모바일에서는 표 안에서 스크롤합니다. 개선된 UI는 갤러리와 새로 생성한 파일에 적용됩니다.</p>
   <h3>반복 조회와 입력 실수 복구</h3>
   <ul><li><strong>보기 저장:</strong> 검색·필터·정렬·열 표시·행 간격을 이름으로 저장하고 적용합니다. 최대 8개, 같은 이름은 갱신합니다.</li><li><strong>열과 행 간격:</strong> 전기일·계정·적요·원가센터·상태를 선택해 표시합니다. 전표·회사·연도·통화·금액은 유지합니다.</li><li><strong>CSV 내보내기:</strong> 선택한 표시 행 우선, 없으면 현재 조회 결과를 내보냅니다. 숨긴 열도 포함하고, 수식 시작 문자를 작은따옴표로 처리합니다.</li><li><strong>20단계 복구:</strong> 셀 연속 입력·여러 셀 붙여넣기·행 추가/삭제를 되돌리거나 다시 실행합니다. Ctrl/⌘+Z, Ctrl+Y 또는 Ctrl/⌘+Shift+Z.</li><li><strong>오류 이동:</strong> 이전/다음 오류 버튼으로 헤더·오류 행에 포커스를 옮깁니다. 변경된 초안은 저장 전 상태로 표시합니다.</li></ul>
   <p>보기 설정만 브라우저에 저장합니다. 브라우저 저장이 막힌 미리보기에서는 현재 화면에서만 유지합니다. 전표 입력과 복구 이력은 화면을 닫으면 사라집니다. CSV의 긴 번호·정밀 금액은 Excel에서 텍스트 열로 가져오세요. XLSX 내보내기와 실제 전표 저장은 별도입니다.</p>

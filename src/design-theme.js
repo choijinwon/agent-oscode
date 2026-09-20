@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {sessionDirectory} from './session.js';
-export const defaultTheme={accent:'#0f766e',accentText:'#ffffff',surface:'#ffffff',background:'#f3f5f4',text:'#182824',muted:'#586963',border:'#ccd7d2',danger:'#b42318',radius:'12px',spacing:'16px',font:'system-ui, sans-serif'};
-export const darkTheme={...defaultTheme,surface:'#172622',background:'#0d1713',text:'#edf5f0',muted:'#a3b5aa',border:'#384d41',accent:'#62d5b6',accentText:'#0d241c',danger:'#ffaaa2'};
+export const defaultTheme={accent:'#0f766e',accentText:'#ffffff',surface:'#ffffff',background:'#f6f8fa',text:'#202b36',muted:'#626f7c',border:'#dce2e8',danger:'#b42318',radius:'12px',spacing:'16px',font:'Pretendard, -apple-system, BlinkMacSystemFont, Apple SD Gothic Neo, Noto Sans KR, Segoe UI, sans-serif'};
+export const darkTheme={...defaultTheme,surface:'#18212c',background:'#101720',text:'#edf2f7',muted:'#a7b3c2',border:'#344253',accent:'#62d5b6',accentText:'#0d241c',danger:'#ffaaa2'};
 export function validateTheme(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!Object.hasOwn(defaultTheme,k)))throw Error('지원하는 디자인 토큰 이름을 확인하세요.');
  for(const [key,v]of Object.entries(value)){
