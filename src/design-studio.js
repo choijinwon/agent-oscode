@@ -4,6 +4,7 @@ import {designRecipe,validateSelection,applyDesign,designFrameworks} from './des
 import {readRegistry,registerDesign,importRegistry,exportRegistry,applyRegistry} from './design-registry.js';
 import {openDesignGallery} from './design-gallery.js';
 export const designHelp=`/design gallery [react|vue|angular|svelte] · 디자인·상태 미리보기
+/design mobile [react|vue|angular|svelte] · 모바일 컴포넌트·화면 크기 미리보기
 /design list · 기본·팀 컴포넌트 목록
 /design select 프레임워크/디자인 · 브라우저 없이 선택
 /design code · 선택한 코드 확인
@@ -25,10 +26,10 @@ export class DesignStudio{
  async command(raw,signal,options={}){
   const [,action='',rest='']=/^(\S+)(?:\s+([\s\S]*))?$/.exec(raw.trim())||[];if(!action)return designHelp;
   if(action==='list'){const r=await designCatalogSummary(this.tools,signal);return [...r.components.map(x=>`${x.id} · ${x.name} · ${x.group}`),...r.team.map(x=>`team:${x.name} · ${x.framework} · ${x.description}`)].join('\n');}
-  if(action==='gallery'){
+  if(action==='gallery'||action==='mobile'){
    const framework=rest||'react';if(!Object.hasOwn(designFrameworks,framework))throw Error('react/vue/angular/svelte 중 선택하세요.');
    const theme=await projectTheme(this.tools,signal),registry=await readRegistry(this.tools);
-   const selected=await openDesignGallery(this.tools,{theme:theme.tokens,framework,registry:registry.items},signal,options);
+   const selected=await openDesignGallery(this.tools,{theme:theme.tokens,framework,registry:registry.items,initial:action==='mobile'?'mobile-tabs':'button'},signal,options);
    if(selected.team){this.team=registry.items.find(x=>x.name===selected.team);this.selection=null;}
    else{this.selection=selected;this.team=null;}
    return `디자인 선택: ${selected.team||selected.item} · ${selected.framework}\n/design code 로 코드 확인\n/design apply 컴포넌트경로 로 새 파일 생성`;

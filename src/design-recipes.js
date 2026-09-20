@@ -17,7 +17,7 @@ function markupFor(raw,framework){
   if(framework==='angular')return `[attr.${attribute}]="id + '${suffix}'"`;
   return `${attribute}={id + ${JSON.stringify(suffix)}}`;
  });
- if(framework==='react')result=result.replace(/\bclass=/g,'className=').replace(/\btabindex=/g,'tabIndex=').replace(/\bautocomplete=/g,'autoComplete=').replace(/<(input)(\s[^>]*?)?>/g,'<$1$2 />');
+ if(framework==='react')result=result.replace(/\bclass=/g,'className=').replace(/\btabindex=/g,'tabIndex=').replace(/\bautocomplete=/g,'autoComplete=').replace(/\binputmode=/g,'inputMode=').replace(/\benterkeyhint=/g,'enterKeyHint=').replace(/<(input)(\s[^>]*?)?>/g,'<$1$2 />');
  if(framework==='svelte')result=result.replace('<div class="oc-table-scroll"','<!-- svelte-ignore a11y_no_noninteractive_tabindex (Scrollable region needs keyboard access.) -->\n<div class="oc-table-scroll"');
  return result;
 }
@@ -28,14 +28,15 @@ export function designRecipe(selection,filename){
  const cssFile=path.basename(file,extension)+'.css';
  if(!/^[A-Za-z0-9_-]+\.css$/.test(cssFile))throw Error('파일 이름은 영문·숫자·하이픈·밑줄을 사용하세요.');
  const scope=path.basename(file,extension)+'-'+createHash('sha256').update(file+'\n'+JSON.stringify({...defaultTheme,...tokens})).digest('hex').slice(0,10);
- const html=markupFor(designMarkup[item],framework),attrs=`class="oc-design" data-design="${scope}" data-variant="${variant}" data-size="${size}"`;
- const runtime=designAction.toString();const events="['click','keydown','submit','input','focusout','mouseout']";
+ const mobile=designCatalog.find(x=>x.id===item).platform==='mobile-web';
+ const html=markupFor(designMarkup[item],framework),attrs=`class="oc-design" data-design="${scope}" data-variant="${variant}" data-size="${size}"${mobile?' data-mobile="true"':''}`;
+ const runtime=designAction.toString();const events="['click','keydown','submit','input','focusin','focusout','mouseout']";
  let code;
  if(framework==='react')code=`'use client';\nimport { useId, useRef, useEffect } from 'react';\nimport './${cssFile}';\n\n${runtime}\n\nexport default function ${name}({ onAction }) {\n const id=useId(), root=useRef(null);\n useEffect(()=>{const el=root.current;if(!el)return;const handler=e=>designAction(e,onAction);for(const type of ${events})el.addEventListener(type,handler);return()=>{for(const type of ${events})el.removeEventListener(type,handler);};},[onAction]);\n return <section ${attrs.replace('class=','className=')} ref={root}>${html}</section>;\n}\n`;
  if(framework==='vue')code=`<script setup>\nimport { ref, useId, onMounted, onBeforeUnmount } from 'vue';\nimport './${cssFile}';\nconst id=useId(), root=ref(null), emit=defineEmits(['action']);\n${runtime}\nconst handler=e=>designAction(e,detail=>emit('action',detail));\nonMounted(()=>{for(const type of ${events})root.value.addEventListener(type,handler);});\nonBeforeUnmount(()=>{for(const type of ${events})root.value?.removeEventListener(type,handler);});\n</script>\n<template><section ${attrs} ref="root">${html}</section></template>\n`;
  if(framework==='svelte')code=`<script>\nimport './${cssFile}';\nlet { onaction=()=>{} }=$props();\nconst id=$props.id();\n${runtime}\nfunction wire(node){const handler=e=>designAction(e,onaction);for(const type of ${events})node.addEventListener(type,handler);return{destroy(){for(const type of ${events})node.removeEventListener(type,handler);}};}\n</script>\n<section ${attrs} use:wire>${html}</section>\n`;
  if(framework==='angular')code=`import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, OnDestroy, PLATFORM_ID, inject } from '@angular/core';\nimport { isPlatformBrowser } from '@angular/common';\n\n${runtime.replace('function designAction(event,emit=()=>{})','function designAction(event: Event,emit: (detail: Record<string, unknown>) => void)')}\n\n@Component({selector:'oscode-design-${item}',standalone:true,template:${JSON.stringify(`<section ${attrs} #root>${html}</section>`)},styleUrls:['./${cssFile}']})\nexport class ${name}Component implements AfterViewInit, OnDestroy {\n @Input({required:true}) id!: string;\n @Output() action=new EventEmitter<Record<string,unknown>>();\n @ViewChild('root') root!: ElementRef<HTMLElement>;\n private platform=inject(PLATFORM_ID);\n private handler=(event:Event)=>designAction(event,detail=>this.action.emit(detail));\n ngAfterViewInit(){if(isPlatformBrowser(this.platform))for(const type of ${events})this.root.nativeElement.addEventListener(type,this.handler);}\n ngOnDestroy(){if(isPlatformBrowser(this.platform))for(const type of ${events})this.root?.nativeElement.removeEventListener(type,this.handler);}\n}\n`;
- return {item,framework,title:designCatalog.find(x=>x.id===item).name,extension,code,css:designCss(tokens,scope),cssFile,minimum:designFrameworks[framework].minimum.join('.'),
+ return {item,framework,title:designCatalog.find(x=>x.id===item).name,extension,code,css:designCss(tokens,scope,mobile),cssFile,minimum:designFrameworks[framework].minimum.join('.'),
   guidance:'Native uncontrolled UI starter. Connect emitted action events to app data and backend. Form events expose the form; no credentials are logged or submitted by this starter. Angular requires a unique, stable id input. Gallery renders shared HTML behavior, not compiled framework components. Import component into the app and run its existing tests.'};
 }
 export async function assertDesignCompatibility(tools,framework,native=true){

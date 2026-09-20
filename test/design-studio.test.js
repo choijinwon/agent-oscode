@@ -172,8 +172,8 @@ test('browser gallery exercises keyboard tabs, modal focus, form validation, sea
     assert.equal(await page.locator('#preview [data-count]').innerText(), '1개 프로젝트');
     await page.locator('#radius').fill('20'); assert.equal(await page.locator('#radius-value').innerText(), '20px');
     await page.locator('#theme-reset').click(); assert.equal(await page.locator('#radius-value').innerText(), '6px');
-    await page.locator('#search').fill('탭'); assert.equal(await page.locator('.catalog-item').count(), 1);
-    await page.locator('.catalog-item').click(); await page.locator('#framework').selectOption('vue');
+    await page.locator('#search').fill('탭'); assert.equal(await page.locator('.catalog-item').count(), 2);
+    await page.locator('[data-id="tabs"]').click(); await page.locator('#framework').selectOption('vue');
     await page.locator('#variant').selectOption('outline');
     const response = page.waitForResponse(r => r.url().endsWith('/select'));
     await page.locator('#choose').click(); assert.equal((await response).status(), 200);
