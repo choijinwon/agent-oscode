@@ -8,11 +8,13 @@ export const profiles = {
 };
 const numbers = ['budget', 'maxInput', 'maxOutput', 'maxSteps', 'outputLimit', 'loopLimit'];
 const strings = ['model', 'baseUrl', 'testCommand'];
-const allowed = new Set(['contextMode', 'verify', 'agent', 'profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
+const allowed = new Set(['intranet', 'intranetStream', 'contextMode', 'verify', 'agent', 'profile', 'provider', 'plan', 'permissions', 'pricing', ...numbers, ...strings]);
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 export function validateProjectConfig(data) {
   if (!object(data)) throw new Error('oscode.json must be an object.');
   for (const key of Object.keys(data)) if (!allowed.has(key)) throw new Error(`Unsupported oscode.json key: ${key}. API keys belong in environment variables.`);
+  for(const key of ['intranet','intranetStream'])if(data[key]!==undefined&&typeof data[key]!=='boolean')throw Error(`${key} must be boolean.`);
+  if(data.intranet&&(data.provider!=='compatible'||!data.baseUrl))throw Error('intranet requires compatible provider and an explicit baseUrl.');
   if (data.contextMode !== undefined && !['focused', 'standard'].includes(data.contextMode)) throw new Error('contextMode must be focused or standard.');
   if (data.verify !== undefined) validateVerify(data.verify);
   if (data.agent !== undefined && !['general', 'frontend'].includes(data.agent)) throw new Error('agent must be general or frontend.');
@@ -55,7 +57,9 @@ export function resolveConfig(project = {}, args = {}, env = process.env) {
   const merged = { ...profiles[profile], loopLimit: 3, ...project, profile,
     contextMode: args['context-mode'] ?? project.contextMode ?? 'focused',
     agent: args.agent ?? env.OSCODE_AGENT ?? project.agent ?? 'general',
-    provider: args.provider ?? env.OSCODE_PROVIDER ?? project.provider ?? 'anthropic',
+    intranet: Boolean(args.intranet || project.intranet),
+    intranetStream: args['intranet-stream'] ?? project.intranetStream ?? false,
+    provider: args.provider ?? (args.intranet ? 'compatible' : undefined) ?? env.OSCODE_PROVIDER ?? project.provider ?? 'anthropic',
     model: args.model ?? env.OSCODE_MODEL ?? project.model,
     baseUrl: args['base-url'] ?? env.OSCODE_BASE_URL ?? project.baseUrl,
     plan: Boolean(args.plan || project.plan),

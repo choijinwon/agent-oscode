@@ -16,6 +16,7 @@ export const commandPalette = [
   ['/workspace', '작업 폴더 지정·변경'], ['/cwd', '현재 작업 폴더 확인'],
   ['/ocr ', '이미지·PDF 텍스트 추출'],
   ['/settings', '모델 설정 변경'], ['/key', 'API 키 숨김 입력'],
+  ['/intranet', '폐쇄망·내부 LLM 주소와 모델 설정·연결 확인'],
   ['/context', '컨텍스트 파일과 토큰 확인'], ['/context history off', '이전 대화 제외'],
   ['/frontend', '프론트엔드 프로젝트 분석'], ['/files', '파일 목록 보기'],
   ['/diagnose', '오류 검사 실행'], ['/fix', '검사 실패 수정 및 재검사'],

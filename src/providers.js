@@ -3,10 +3,10 @@ import { getCredential } from './credentials.js';
 import { estimateTokens } from './context.js';
 import { collectStream } from './stream.js';
 
-export function endpoint(base, route) {
+export function endpoint(base, route, internal = false) {
   const url = new URL(base);
   if (url.username || url.password || url.search || url.hash) throw new Error('Base URL must not contain credentials, query, or fragment.');
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) {
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && (internal || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) {
     throw new Error('Use HTTPS, or HTTP on localhost for a local model.');
   }
   return `${url.href.replace(/\/$/, '')}/${route}`;
@@ -71,19 +71,22 @@ export function parseResponse(kind, data, request) {
   return { content, calls, truncated, usage };
 }
 export function createProvider(config, fetchImpl = fetch) {
+  if(config.intranet&&(config.provider!=='compatible'||!config.baseUrl))throw Error('폐쇄망 모드는 compatible과 명시적인 내부 API 주소가 필요합니다.');
   if (config.provider === 'chatgpt') return createCodexProvider();
   if (config.provider === 'demo') return demoProvider();
   const kind = config.provider;
   if (!['anthropic', 'compatible'].includes(kind)) throw new Error('Provider must be anthropic, compatible, or demo.');
   const base = config.baseUrl || (kind === 'anthropic' ? 'https://api.anthropic.com/v1' : 'https://openrouter.ai/api/v1');
-  const url = endpoint(base, kind === 'anthropic' ? 'messages' : 'chat/completions');
-  const key = (kind === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY) || getCredential(kind, base);
-  if (!key && !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)) throw new Error(`Set ${kind === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OSCODE_API_KEY'} or use oscode auth set --provider ${kind}.`);
+  const url = endpoint(base, kind === 'anthropic' ? 'messages' : 'chat/completions',config.intranet);
+  const key = config.intranet ? process.env.OSCODE_INTRANET_API_KEY : (kind === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OSCODE_API_KEY) || getCredential(kind, base);
+  if (!config.intranet && !key && !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)) throw new Error(`Set ${kind === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OSCODE_API_KEY'} or use oscode auth set --provider ${kind}.`);
   return { async complete(request, signal, onText) {
     const headers = { 'content-type': 'application/json' };
     if (kind === 'anthropic') { headers['anthropic-version'] = '2023-06-01'; if (key) headers['x-api-key'] = key; }
     else if (key) headers.authorization = `Bearer ${key}`;
-    const response = await fetchImpl(url, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ ...makeBody(kind, request), stream: true, ...(kind === 'compatible' ? { stream_options: { include_usage: true } } : {}) }), signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
+    const body=makeBody(kind,request);
+    if(config.intranet&&!request.tools.length){delete body.tools;delete body.tool_choice;}
+    const response = await fetchImpl(url, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ ...body, stream: config.intranet ? Boolean(config.intranetStream) : true, ...(kind === 'compatible' && !config.intranet ? { stream_options: { include_usage: true } } : {}) }), signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
     if (!response.ok) { await response.body?.cancel(); throw new Error(`API HTTP ${response.status}; check model, credentials, endpoint, and provider quota. No automatic retry was made.`); }
     const streamed = response.headers.get('content-type')?.includes('text/event-stream');
     const data = streamed ? await collectStream(kind, response.body, onText) : await response.json();

@@ -82,6 +82,7 @@ const help = `oscode — 토큰 예산을 관리하는 터미널 코딩 에이�
   /fix                             실패 수정 후 동일 검사 재실행
 
 설정:
+  --intranet                       명시한 내부 호환 API 사용 (외부 기본 주소·키 사용 안 함)
   --simple                         전체 화면 대신 기본 줄 단위 콘솔
   --ui-preview                     키 없이 콘솔 UI 예시 화면 확인
   --verbose                        모델 호출·도구 결과 상세 출력
@@ -143,7 +144,7 @@ async function main(raw = process.argv.slice(2), host) {
   const cliArgs = authAction ? raw.slice(2) : raw[0] === 'verify' ? ['--verify', ...raw.slice(1)] : raw[0] === 'ui' && raw[1] === 'check' ? ['--ui-check', ...raw.slice(2)] : raw;
   const { values: args } = parseArgs({ args: cliArgs, options: Object.fromEntries([
     ...['frontend-context', 'ab-context', 'context-mode', 'start', 'url', 'scenario', 'baseline', 'approve-baseline', 'impact', 'story', 'states', 'story-role', 'story-name', 'component', 'output', 'ui-check', 'viewport', 'agent', 'cwd', 'profile', 'model', 'provider', 'base-url', 'budget', 'max-input', 'max-output', 'max-steps', 'prompt', 'resume', 'loop-limit', 'undo'].map(k => [k, { type: 'string' }]),
-    ...['simple', 'ui-preview', 'verbose', 'key-stdin', 'copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
+    ...['intranet', 'intranet-stream', 'simple', 'ui-preview', 'verbose', 'key-stdin', 'copy-last', 'analysis-notes', 'ab-live', 'verify', 'changed', 'open', 'a11y', 'tokens', 'architecture', 'inspect-frontend', 'help', 'demo', 'plan', 'yes', 'allow-shell', 'init', 'usage', 'checkpoints', 'config', 'show-plan', 'apply-plan'].map(k => [k, { type: 'boolean' }])
   ]) });
   if (authAction) { await configureAuth(authAction, args); return; }
   if (args['key-stdin']) throw new Error('--key-stdin requires auth set.');
@@ -306,7 +307,7 @@ async function main(raw = process.argv.slice(2), host) {
     let style;try{style=await readAppearance(root);}catch(error){print(`화면 설정 읽기 실패: ${error.message} · 기본 스타일 사용`);}
     const uiOptions={ appearance:style, paste: () => accessClipboard('read'), copy: (kind, draft) => accessClipboard('write', kind === 'draft' ? draft : lastAnswer(session, kind === 'code')), status: () => ({ project: path.basename(root), approval:approvalMode.label, skill:skills.selected?.title, directory: root, mode: config.plan ? 'PLAN' : 'BUILD', model: config.model || 'LOCAL', budget: config.budget,
       usageEstimated: Boolean(session.turns.at(-1)?.usage.estimated), used: (session.turns.at(-1)?.usage.input || 0) + (session.turns.at(-1)?.usage.output || 0), estimate: screen ? estimateTokens(screen.buffer) : 0 }) };
-    const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.plan?['--plan']:[])];
+    const childArgs=()=>['--cwd',root,'--agent',config.agent,'--provider',config.provider,'--budget',String(config.budget),...(config.model?['--model',config.model]:[]),...(config.baseUrl?['--base-url',config.baseUrl]:[]),...(config.intranet?['--intranet']:[]),...(config.intranetStream?['--intranet-stream']:[]),...(config.plan?['--plan']:[])];
     screen=host?host.createUI(uiOptions,childArgs):new ConsoleUI(uiOptions);
     if(readSaved)screen.restoreSession(session);
     if(session.latestReview){screen.reviewLabel=reviewVerdict(session.latestReview).label+' · 이전 검사';screen.render();}
@@ -414,6 +415,24 @@ async function main(raw = process.argv.slice(2), host) {
       if (!input.trim()) continue;
       if (!screen?.lastInputWasPaste && input.trim().startsWith('/')) input = input.trim();
       if (screen?.lastInputWasPaste) { await execute(input); continue; }
+      if(input==='/intranet'||input.startsWith('/intranet ')){
+        const value=input.slice(9).trim();
+        try{
+          if(value==='check'){
+            if(!config.intranet)throw Error('먼저 /intranet JSON으로 내부 주소와 모델을 지정하세요.');
+            active=new AbortController();screen?.setStage('내부 LLM 연결 확인');
+            const result=await createProvider(config).complete({model:config.model,maxOutput:32,system:'Reply briefly.',messages:[{role:'user',content:'Reply OK.'}],tools:[]},active.signal);
+            print(`내부 모델 응답 수신: ${config.model} · 생성 ${result.usage.output} 토큰 · 도구 호출 지원 여부는 별도 확인이 필요합니다.`);
+          }else if(value){
+            const data=JSON.parse(value);
+            if(!data||Object.keys(data).some(k=>!['baseUrl','model','intranetStream'].includes(k))||!data.baseUrl||!data.model)throw Error('baseUrl과 model을 지정하세요.');
+            const next={...config,...data,provider:'compatible',intranet:true};
+            endpoint(next.baseUrl,'chat/completions',true);createProvider(next);
+            if(typeof data.model!=='string'||data.model.length>200||(data.intranetStream!==undefined&&typeof data.intranetStream!=='boolean'))throw Error('모델·스트리밍 설정을 확인하세요.');
+            Object.assign(config,next);print('내부 LLM 설정을 현재 세션에 적용했습니다. /intranet check로 확인하세요. 영구 설정은 oscode.json에 저장하세요.');
+          }else print(`내부 LLM: ${config.intranet?'사용 중':'미설정'}\n/intranet {"baseUrl":"http://10.0.0.10:8000/v1","model":"your-model"}\n연결 검사: /intranet check · 인증: OSCODE_INTRANET_API_KEY`);
+        }catch(error){print(`내부 LLM: ${error.message}`);}finally{active=null;screen?.setStage('대기');}continue;
+      }
       if(input==='/mcp'||input.startsWith('/mcp ')){
         active=new AbortController();screen?.setStage('MCP 연결 관리');
         try{print(await tools.mcp.command(input.slice(4),active.signal));}catch(error){print(`MCP: ${error.message}`);}
@@ -592,6 +611,7 @@ async function main(raw = process.argv.slice(2), host) {
         verbose = input === '/verbose' ? !verbose : input.endsWith(' on');
         print(`  상세 출력 ${verbose ? '켜짐' : '꺼짐'}`); continue;
       }
+      if (input === '/settings' && config.intranet) {print('폐쇄망 모드입니다. /intranet JSON으로 내부 주소·모델을 변경하세요. 연결 확인: /intranet check');continue;}
       if (input === '/settings') {
         if (screen) screen.panel = '설정';
         active = new AbortController();
@@ -618,6 +638,7 @@ async function main(raw = process.argv.slice(2), host) {
         finally { active = null; if (screen) { screen.panel = '대화'; screen.render(); } }
         continue;
       }
+      if(config.intranet&&(input==='/key'||input.startsWith('/key '))){print('폐쇄망 인증은 OSCODE_INTRANET_API_KEY 환경변수를 사용합니다. 외부 공급자의 저장된 키는 전송하지 않습니다.');continue;}
       if (input === '/key' || input === '/key status' || input === '/key remove') {
         if(config.provider==='chatgpt') {print('ChatGPT 인증은 /settings의 로그인·연결 해제를 사용하세요.');continue;}
         active = new AbortController();
