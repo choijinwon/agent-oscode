@@ -12,6 +12,8 @@ import {taskReport,exportHandoff} from '../src/task-report.js';
 import {repositoryMap} from '../src/repository-map.js';
 import {ApprovalMode} from '../src/approval-mode.js';
 import {readAppearance,saveAppearance,appearanceUI} from '../src/appearance.js';
+import { impactText } from '../src/frontend-dependencies.js';
+import { ProjectRules, rulesText } from '../src/project-rules.js';
 import { ProjectSkills } from '../src/skills.js';
 import { changePreview } from '../src/change-preview.js';
 import {AgentTabs} from '../src/agent-tabs.js';
@@ -36,7 +38,7 @@ import { verifyProject } from '../src/verify.js';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { approveBaseline } from '../src/ui-workflow.js';
-import { storyRecipe } from '../src/frontend-quality.js';
+import { storyRecipe, inspectImpact } from '../src/frontend-quality.js';
 import { componentRecipe } from '../src/components.js';
 import { checkUi, uiSummary } from '../src/ui-check.js';
 import fs from 'node:fs/promises';
@@ -84,6 +86,8 @@ oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
   @src/Button.tsx 요청              선택 파일 첨부 (Tab/방향키 자동완성)
   /skills                          .oscode/skills 스킬 선택 · off 해제
   /context                         파일·대화 컨텍스트 관리
+  /impact 파일경로                  영향받는 화면·테스트와 연결 근거
+  /rules [explain 파일경로|last]     파일별 규칙·선택 이유·토큰 확인
   /diagnose [script]                프로젝트 검사 실행
   /fix                             실패 수정 후 동일 검사 재실행
 
@@ -389,7 +393,7 @@ async function main(raw = process.argv.slice(2), host) {
     screen?.clearFailure();
     const originalPrompt = prompt;
     const pastedPrompt = Boolean(screen?.lastInputWasPaste);
-    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = await skills.prepare(prepared.prompt,active.signal); const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan }); showPreview(config.verify?.url); return result; }
+    try { const prepared = await selectedContext.prepare(prompt, active.signal, includeMentions); prompt = await skills.prepare(prepared.prompt,active.signal); const provider = readyProvider(); const result=await runTurn({ session, prompt, config, provider, tools, signal: active.signal, emit, save: saveSession, executionPlan, contextFiles: prepared.files.map(file => file.file) }); showPreview(config.verify?.url); return result; }
     catch (e) { screen?.showFailure(originalPrompt,pastedPrompt); const restoredQueue=screen?.pauseQueuedPrompt(); if (active.signal.aborted && !restoredQueue) screen?.recoverPrompt(originalPrompt, pastedPrompt); print(`중단: ${e.message}`); if (!interactive || args.prompt || args.demo || args['apply-plan']) process.exitCode = 1; }
     finally { active = null; if (screen) { screen.setCommunicating(false); screen.stage = '대기'; screen.panel = '대화'; screen.render(); } if (session.turns.length) print(interactive && !verbose ? turnFooter(session.turns.at(-1).usage) : usageText(session.turns.at(-1).usage)); }
   };
@@ -562,6 +566,27 @@ async function main(raw = process.argv.slice(2), host) {
           if(input==='/handoff copy'){await accessClipboard('write',taskReport(session,{handoff:true}));print('작업 인계 내용을 복사했습니다. 새 대화에 붙여넣고 다음 요청을 추가하세요.');}
           else{const report=await exportHandoff(session);print(`작업 인계 파일: ${report.file}\n약 ${report.estimatedTokens} 토큰 (추정) · 모델 추가 호출 없음\n복사: /handoff copy · 최근 결과 보기: /summary`);}
         }catch(error){print(`작업 인계 실패: ${error.message}`);}continue;
+      }
+      if(input==='/impact'||input.startsWith('/impact ')){
+        active=new AbortController();screen?.setStage('변경 영향 분석 중');
+        try{const target=input.slice(7).trim().replace(/^"(.*)"$/, '$1');if(!target)print('사용법: /impact src/components/Button.vue · CSS/SCSS·Angular 템플릿도 지원');else print(impactText(JSON.parse(await inspectImpact(tools,target,active.signal))));}
+        catch(error){print(`변경 영향: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
+      }
+      if(input==='/rules'||input.startsWith('/rules ')){
+        active=new AbortController();
+        try{
+          const argument=input.slice(6).trim();
+          if(argument==='last')print(rulesText([...(session.archive||[]),...session.turns].flatMap(turn=>turn.requests||[]).at(-1)?.rules,'마지막 모델 요청 당시'));
+          else {
+            if(argument&&!argument.startsWith('explain '))throw new Error('/rules · /rules explain 파일경로 · /rules last');
+            const target=argument.slice(8).trim().replace(/^"(.*)"$/, '$1');
+            const files=target?[target]:[...selectedContext.selected];
+            const normalized=[];
+            for(const file of files)normalized.push(path.relative(root,await tools.resolve(file)).split(path.sep).join('/'));
+            print(rulesText((await new ProjectRules(root).snapshot(normalized,active.signal)).report,target?'지정 파일 미리보기':'현재 선택 파일 기준'));
+          }
+        }catch(error){print(`프로젝트 규칙: ${error.message}`);}finally{active=null;}continue;
       }
       if(input==='/map'||input.startsWith('/map ')){
         active=new AbortController();screen?.setStage('코드 지도 생성 중');

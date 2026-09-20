@@ -33,60 +33,7 @@ export async function inspectTokens(tools, directory = '.', signal) {
     limitations: 'Static CSS and literal utility candidates only; first 100 files, 32k characters each. Does not execute Tailwind v3 JS config or resolve CSS cascade, variants, dynamic classes, plugins or token semantics. No automatic replacements.' }, null, 2);
 }
 async function parser() { try { return (await import('typescript')).default; } catch { throw new Error('Install optional typescript dependency for AST analysis.'); } }
-export async function inspectImpact(tools, target, signal) {
-  const ts = await parser();
-  target = path.relative(tools.root, await tools.resolve(target));
-  const all = (await tools.files('.', signal)).filter(f => /\.[cm]?[jt]sx?$/.test(f));
-  const set = new Set(all), edges = [], skipped = [];
-  let config = {}, configNote = 'No root tsconfig.json';
-  try {
-    const result = ts.parseConfigFileTextToJson('tsconfig.json', await tools.text(await tools.resolve('tsconfig.json')));
-    if (result.error) throw new Error('Invalid tsconfig.json');
-    config = result.config.compilerOptions || {};
-    configNote = result.config.extends ? 'Root paths only; extends is not followed.' : 'Root tsconfig paths/baseUrl supported.';
-  } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  const resolve = (specifier, file) => {
-    let bases = [];
-    if (specifier.startsWith('.')) bases.push(path.join(path.dirname(file), specifier));
-    else {
-      for (const [alias, replacements] of Object.entries(config.paths || {})) {
-        if (!Array.isArray(replacements)) continue;
-        const parts = alias.split('*');
-        if (parts.length > 2) continue;
-        if (parts.length === 1 ? alias !== specifier : !specifier.startsWith(parts[0]) || !specifier.endsWith(parts[1])) continue;
-        const match = parts.length === 2 ? specifier.slice(parts[0].length, parts[1].length ? -parts[1].length : undefined) : '';
-        bases.push(...replacements.filter(v => typeof v === 'string').map(v => path.join(config.baseUrl || '.', v.replace('*', match))));
-      }
-      if (config.baseUrl) bases.push(path.join(config.baseUrl, specifier));
-    }
-    for (const base of bases) {
-      const normalized = path.normalize(base), stem = normalized.replace(/\.[cm]?jsx?$/, '');
-      const found = [normalized, ...['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '/index.ts', '/index.tsx', '/index.js'].flatMap(ext => [normalized + ext, stem + ext])].find(f => set.has(f));
-      if (found) return found;
-    }
-  };
-  for (const file of all.slice(0, 300)) {
-    if (signal?.aborted) throw new Error('Cancelled.');
-    let source; try { source = await tools.text(await tools.resolve(file)); } catch { skipped.push(file); continue; }
-    if (source.length > 120000) { skipped.push(file); continue; }
-    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-    if (ast.parseDiagnostics.length) { skipped.push(file); continue; }
-    const visit = node => {
-      let specifier;
-      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && !node.isTypeOnly && !node.importClause?.isTypeOnly) specifier = node.moduleSpecifier;
-      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) specifier = node.arguments[0];
-      if (specifier && ts.isStringLiteral(specifier)) { const to = resolve(specifier.text, file); if (to && edges.length < 3000) edges.push({ from: file, to }); }
-      ts.forEachChild(node, visit);
-    };
-    visit(ast);
-  }
-  const affected = new Set([target]), queue = [target];
-  while (queue.length) { const file = queue.shift(); for (const edge of edges) if (edge.to === file && !affected.has(edge.from)) { affected.add(edge.from); queue.push(edge.from); } }
-  affected.delete(target);
-  return JSON.stringify({ target, affectedFiles: [...affected].slice(0, 80), testCandidates: [...affected].filter(f => /\.(test|spec)\.|__tests__/.test(f)), totalAffected: affected.size, scannedFiles: Math.min(all.length, 300) - skipped.length,
-    partial: all.length > 300 || skipped.length > 0 || edges.length >= 3000, skipped: skipped.slice(0, 10), configNote,
-    limitations: 'AST-based reverse imports/re-exports and literal dynamic imports; max 300 files/3000 edges. Root tsconfig aliases only. Does not model CSS, Vue/Svelte templates, runtime resolution or implicit framework routes. Results are test selection candidates, not proof of complete coverage.' }, null, 2);
-}
+export { dependencyImpact as inspectImpact } from './frontend-dependencies.js';
 export async function storyRecipe(tools, { path: file, states: statesFile, role, name }, signal) {
   if (signal?.aborted) throw new Error('Cancelled.');
   const ts = await parser(), resolved = await tools.resolve(file), source = await tools.text(resolved);

@@ -42,7 +42,7 @@ export function inputFrame({ model, plan, connected, draft = false, ...options }
 export function renderAnswerHeading(options) { return '\n' + theme(options).accent('  OSCODE') + '\n\n'; }
 export const chatPrompt = '  ╰─ › ';
 export const answerHeading = '\n  ◇ OSCODE\n\n';
-const toolLabels = { read_file: '코드 읽기', list_files: '파일 탐색', search: '코드 검색', edit_file: '코드 수정', write_file: '파일 생성', frontend_context: '컴포넌트 분석', frontend_inspect: '프로젝트 분석', shell: '명령 실행', analysis_checkpoint: '분석 메모 저장', ui_check: '화면 검사' };
+const toolLabels = { frontend_impact: '변경 영향 분석', read_file: '코드 읽기', list_files: '파일 탐색', search: '코드 검색', edit_file: '코드 수정', write_file: '파일 생성', frontend_context: '컴포넌트 분석', frontend_inspect: '프로젝트 분석', shell: '명령 실행', analysis_checkpoint: '분석 메모 저장', ui_check: '화면 검사' };
 export function toolStatus({ name, is_error, content }) {
   return `  ${is_error ? '실패' : '완료'} · ${toolLabels[name] || safe(name)}${is_error ? `\n  ${fit(content, 140)}` : ''}`;
 }

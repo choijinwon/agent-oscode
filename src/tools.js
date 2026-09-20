@@ -40,7 +40,7 @@ export const toolDefinitions = [
   tool('frontend_context', 'Read a bounded component and direct relative imports, adjacent styles and Angular templates. Reuse imported UI components and tokens. Aliases/dynamic/transitive imports may be missing; expand with read_file. Read exact source before editing.', { path: str }, ['path']),
   tool('verify_project', 'Run configured project verification scripts and optional dev server/browser diagnostics; save local HTML/JSON report. BUILD only, shell approvals required. changed means working tree relative to HEAD.', { changed: bool, start: str, url: str }, []),
   tool('tailwind_tokens', 'Inspect bounded CSS tokens and literal arbitrary Tailwind utility candidates without executing configuration.', { path: str }, []),
-  tool('frontend_impact', 'AST-based reverse import impact for a project source file, including root tsconfig aliases and re-exports; bounded candidate analysis.', { path: str }, ['path']),
+  tool('frontend_impact', 'Trace frontend changes to affected files, page/test candidates and line-numbered import chains. Supports React, Vue, Angular, Svelte and styles; hash-checked parse cache, no source bodies. Bounded static analysis, not coverage proof. tokens: 800–4000 (default 2400).', { path: str, tokens: integer }, ['path']),
   tool('storybook_recipe', 'Generate a React default-export CSF story recipe with optional JSON state args and role/name visibility assertions. Read-only; apply via file tools.', { path: str, states: str, role: str, name: str }, ['path']),
   tool('frontend_states', 'Find bounded loading/error/empty/disabled source markers in one component or template. Read-only heuristic candidates, not runtime verification or a pass/fail audit.', {path:str}, ['path']),
   tool('frontend_architecture', 'Inspect bounded frontend folder roles, client directives and relative import cycle/layer candidates. Heuristic, read-only; verify source before proposing architecture changes.', { path: str }, []),
@@ -207,7 +207,7 @@ export class WorkspaceTools {
       return JSON.stringify({ status: report.status, steps: report.steps.map(({ name, status, reason }) => ({ name, status, reason })), report: report.file, html: report.html });
     }
     if (name === 'tailwind_tokens') return inspectTokens(this, input.path, signal);
-    if (name === 'frontend_impact') return inspectImpact(this, input.path, signal);
+    if (name === 'frontend_impact') return inspectImpact(this, input.path, signal, input.tokens);
     if (name === 'storybook_recipe') return storyRecipe(this, input, signal);
     if (name === 'frontend_states') return JSON.stringify(await inspectStates(this, input.path, signal));
     if (name === 'frontend_architecture') return inspectArchitecture(this, input.path, signal);

@@ -469,6 +469,22 @@ cp -n examples/skills/frontend-review/SKILL.md .oscode/skills/frontend-review/SK
 
 [경쟁 도구 비교·구현 범위](docs/competitive-analysis.md)
 
+## 변경 영향과 파일별 규칙
+
+최신 소스에서 사용할 수 있습니다. npm `0.10.0`에는 이번 기능이 포함되지 않았습니다.
+
+```text
+/impact src/styles/tokens.css
+/rules explain src/components/Button.vue
+/rules last
+```
+
+`/impact`는 React·Vue·Angular·Svelte의 import, 스타일과 Angular 템플릿 연결을 따라 영향받는 파일·화면·테스트 후보와 줄 번호 근거를 보여줍니다. 해시가 같은 파일은 파싱을 재사용하며 최대 300개 파일·2 MiB, 기본 추정 2,400 토큰으로 제한합니다. `partial`과 `omittedAffected`로 스캔 한계와 출력 생략을 구분합니다. 전체 런타임이나 LSP 분석은 아니며 테스트 통과를 뜻하지 않습니다.
+
+`.oscode/rules/<이름>.md`에 한 줄 JSON 배열 `paths`와 Markdown 본문을 저장하면 첨부한 파일·이번 턴에서 읽은 파일에 일치하는 규칙만 다음 모델 요청에 포함합니다. 예시와 사용법은 [변경 영향·파일별 규칙 가이드](docs/frontend-impact-and-rules.md)를 보세요.
+
+`/rules`와 `/rules explain 파일경로`는 포함·범위 밖·예산 초과·형식 오류와 토큰 추정을 보여줍니다. `/rules last`는 마지막 요청 당시 기록입니다. 규칙은 총 추정 2,000 토큰 안에서 포함하며 매 요청 새로 읽습니다. 새 규칙이 있는 파일의 편집은 규칙을 모델에 전달한 뒤 재시도하도록 보류합니다. 본문을 매 턴 대화 기록에 누적하지 않고 기존 승인·PLAN 제한을 유지합니다.
+
 ## 작업 결과와 인계
 
 - `/summary`: 최근 작업의 요청·파일 편집 기록·도구 실행 근거·토큰·중단 사유 표시
