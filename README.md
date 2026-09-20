@@ -31,6 +31,12 @@ OpenCode의 여러 모델 연결 방식, Pi의 작고 분리된 실행 코어, C
 
 [명령·예제·검증 범위](docs/frontend-workbench.md). 소스 후보는 소유 관계의 확정이 아니며, 모든 진단은 관찰 범위를 표시합니다. AI 수정 외 진단은 모델 키 없이 실행합니다. **npm 0.10.0에는 아직 포함되지 않습니다.**
 
+## 디자인 스튜디오 (최신 GitHub 소스)
+
+`/design gallery react`로 로컬 브라우저에서 컴포넌트를 검색하고 색상·크기·스타일·상태별 예시를 살펴봅니다. 폼·탭·모달·툴팁·테이블 등 12종을 React·Vue·Angular·Svelte 코드로 생성하며, 프로젝트 토큰과 팀 컴포넌트 공유 파일을 지원합니다.
+
+`/design code`로 확인한 뒤 `/design apply src/components/Profile.jsx`로 코드·CSS를 생성합니다. 앱 import와 데이터 연결은 이어서 수행합니다. 갤러리는 공통 HTML 미리보기이며 팀 코드를 실행하지 않습니다. [사용법·호환 버전·검증 범위](docs/design-studio.md). **npm 0.10.0에는 아직 포함되지 않습니다.**
+
 ## 프론트엔드 토큰 절약과 A/B 비교
 
 `--agent frontend`는 컴포넌트와 직접 연결된 코드부터 읽도록 안내하고, 긴 셸 결과를 요약합니다. `--context-mode standard`로 기존 동작을 사용할 수 있습니다.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {DesignStudio,designHelp} from '../src/design-studio.js';
 import {FrontendWorkbench,workbenchHelp} from '../src/frontend-workbench.js';
 import {McpHub} from '../src/mcp.js';
 import {UiRepair} from '../src/ui-repair.js';
@@ -56,7 +57,9 @@ const clean = text => stripVTControlCharacters(String(text)).replace(/[\x00-\x08
 let screen = null;
 const output = text => screen ? screen.append(clean(text)) : process.stdout.write(text);
 const print = text => output(clean(text) + '\n');
-const help = `${workbenchHelp}
+const help = `${designHelp}
+
+${workbenchHelp}
 
 oscode — 토큰 예산을 관리하는 터미널 코딩 에이전트
 
@@ -333,6 +336,7 @@ async function main(raw = process.argv.slice(2), host) {
     }
   });
   const workbench=new FrontendWorkbench(tools);
+  const designStudio=new DesignStudio(tools);
   tools.mcp=new McpHub(tools);
   if(host)tools.mcp.runExclusive=(run,signal)=>host.exclusive(root,run,signal);
   const originalPerform=tools.perform.bind(tools);
@@ -436,6 +440,12 @@ async function main(raw = process.argv.slice(2), host) {
             Object.assign(config,next);print('내부 LLM 설정을 현재 세션에 적용했습니다. /intranet check로 확인하세요. 영구 설정은 oscode.json에 저장하세요.');
           }else print(`내부 LLM: ${config.intranet?'사용 중':'미설정'}\n/intranet {"baseUrl":"http://10.0.0.10:8000/v1","model":"your-model"}\n연결 검사: /intranet check · 인증: OSCODE_INTRANET_API_KEY`);
         }catch(error){print(`내부 LLM: ${error.message}`);}finally{active=null;screen?.setStage('대기');}continue;
+      }
+      if(input==='/design'||input.startsWith('/design ')){
+        active=new AbortController();screen?.setStage('디자인 스튜디오');
+        try{print(await designStudio.command(input.slice(7),active.signal));}
+        catch(error){print(`디자인: ${error.message}`);}
+        finally{active=null;screen?.setStage('대기');}continue;
       }
       if(input==='/mcp'||input.startsWith('/mcp ')){
         active=new AbortController();screen?.setStage('MCP 연결 관리');

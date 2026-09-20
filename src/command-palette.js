@@ -1,5 +1,10 @@
 export const primaryCommands = ['/states record ', '/states run ', '/states fix ', '/preview', '/settings', '/workspace', '/review', '/help'];
 export const commandPalette = [
+  ['/design gallery ', '디자인 갤러리·색상·크기·상태별 미리보기'],
+  ['/design', '디자인 스튜디오·테마·팀 컴포넌트 사용법'],
+  ['/design apply ', '선택한 컴포넌트와 CSS 생성'],
+  ['/design theme', '프로젝트 디자인 토큰 확인·설정'],
+  ['/design register ', '팀 컴포넌트 등록'],
   ['/inspect ', '화면 요소 선택·관련 소스·스타일 진단'],
   ['/inspect fix ', '선택한 요소 수정·같은 조건 재진단'],
   ['/css ', '선택자의 실제 CSS·부모 레이아웃 진단'],
