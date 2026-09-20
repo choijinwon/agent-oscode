@@ -1,6 +1,7 @@
 import {themeCss,defaultTheme} from './design-theme.js';
 import {mobileCatalog,mobileMarkup,mobileStyles} from './design-mobile.js';
 import {adminCatalog,adminMarkup,adminStyles} from './design-admin.js';
+import {designMotionStyles} from './design-motion.js';
 export const designCatalog=[
  {id:'button',name:'액션 버튼',group:'기본',description:'중요한 작업을 위한 버튼'},
  {id:'form',name:'입력 폼',group:'입력',description:'이메일 검증과 제출 이벤트'},
@@ -79,4 +80,4 @@ export const designStyles=`
 .oc-design .oc-table-scroll{overflow:auto}.oc-design table{border-collapse:collapse;width:100%;text-align:left}.oc-design caption{text-align:left;font-weight:700;padding:0 0 14px}.oc-design th,.oc-design td{padding:12px;border-bottom:1px solid var(--oc-border);white-space:nowrap}.oc-design .oc-badge{padding:4px 8px;border-radius:99px;background:var(--oc-background);font-size:12px}.oc-design .oc-results{list-style:none;padding:0;margin:0}.oc-design .oc-results li{padding:14px 0;border-top:1px solid var(--oc-border)}.oc-design .oc-feedback{color:var(--oc-muted)}
 `;
 export function previewMarkup(id,uid='preview'){if(!Object.hasOwn(designMarkup,id))throw Error('알 수 없는 디자인');return designMarkup[id].replaceAll('__id__',uid);}
-export function designCss(tokens=defaultTheme,scope="",mobile=false,admin=false){return `.oc-design${scope?`[data-design="${scope}"]`:""}{${themeCss(tokens)}}\n${designStyles}${mobile?mobileStyles:''}${admin?adminStyles:''}`;}
+export function designCss(tokens=defaultTheme,scope="",mobile=false,admin=false){return `.oc-design${scope?`[data-design="${scope}"]`:""}{${themeCss(tokens)}}\n${designStyles}${designMotionStyles}${mobile?mobileStyles:''}${admin?adminStyles:''}`;}

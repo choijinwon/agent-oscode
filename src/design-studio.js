@@ -8,6 +8,7 @@ export const designHelp=`/design gallery [react|vue|angular|svelte] · 디자인
 /design admin [react|vue|angular|svelte] · 관리자 디자인·테이블·사용자 화면
 /design list · 기본·팀 컴포넌트 목록
 /design select 프레임워크/디자인 · 브라우저 없이 선택
+/design motion auto|reduced|off · 인터랙션 강도
 /design code · 선택한 코드 확인
 /design apply 경로 · 코드·CSS 새 파일 생성
 /design theme · 프로젝트 테마 후보 보기
@@ -40,6 +41,10 @@ export class DesignStudio{
    this.selection=validateSelection({framework,item,tokens:(await projectTheme(this.tools,signal)).tokens});this.team=null;return `선택: ${framework}/${item} · /design code → /design apply 경로`;
   }
   if(action==='use'){const r=await readRegistry(this.tools);const item=r.items.find(x=>x.name===rest);if(!item)throw Error('등록된 팀 컴포넌트 이름을 확인하세요.');this.team=item;this.selection=null;return `선택: ${item.name}\n${item.usage}\n/design code → /design apply 경로`;}
+  if(action==='motion'){
+   if(!this.selection)throw Error('먼저 기본 디자인을 선택하세요.');
+   this.selection=validateSelection({...this.selection,motion:rest});return '인터랙션: '+rest+' · 생성 코드에 반영됩니다. OS 움직임 줄이기를 우선합니다.';
+  }
   if(action==='code'){
    if(this.team)return `${this.team.code}\n\n/* CSS */\n${this.team.css}\n\n${this.team.usage}`;
    if(!this.selection)throw Error('먼저 디자인을 선택하세요.');const r=designRecipe(this.selection);return `${r.code}\n\n/* ${r.cssFile} */\n${r.css}\n\n${r.guidance}`;

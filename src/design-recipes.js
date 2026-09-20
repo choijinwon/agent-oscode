@@ -3,12 +3,14 @@ import {createHash} from 'node:crypto';
 import {designMarkup,designCatalog,designAction,designCss} from './design-catalog.js';
 import {validateTheme,defaultTheme} from './design-theme.js';
 import {detectFrameworks} from './frameworks.js';
+import {designMotion} from './design-motion.js';
 import {adminAction} from './design-admin-behavior.js';
 export const designFrameworks={react:{package:'react',extension:'.jsx',minimum:[18,0]},vue:{package:'vue',extension:'.vue',minimum:[3,5]},angular:{package:'@angular/core',extension:'.ts',minimum:[16,0]},svelte:{package:'svelte',extension:'.svelte',minimum:[5,20]}};
 export function validateSelection(s){
- if(!s||Object.keys(s).some(k=>!['item','framework','variant','size','tokens'].includes(k))||!Object.hasOwn(designMarkup,s.item)||!Object.hasOwn(designFrameworks,s.framework))throw Error('디자인과 프레임워크를 선택하세요.');
+ if(!s||Object.keys(s).some(k=>!['item','framework','variant','size','tokens','motion'].includes(k))||!Object.hasOwn(designMarkup,s.item)||!Object.hasOwn(designFrameworks,s.framework))throw Error('디자인과 프레임워크를 선택하세요.');
  if(s.variant!==undefined&&!['solid','soft','outline'].includes(s.variant))throw Error('variant: solid/soft/outline');
  if(s.size!==undefined&&!['small','medium','large'].includes(s.size))throw Error('size: small/medium/large');
+ if(s.motion!==undefined&&!['auto','reduced','off'].includes(s.motion))throw Error('motion: auto/reduced/off');
  if(s.tokens)validateTheme(s.tokens);return s;
 }
 function markupFor(raw,framework){
@@ -23,7 +25,7 @@ function markupFor(raw,framework){
  return result;
 }
 export function designRecipe(selection,filename){
- validateSelection(selection);const {item,framework,variant='solid',size='medium',tokens=defaultTheme}=selection;
+ validateSelection(selection);const {item,framework,variant='solid',size='medium',motion='auto',tokens=defaultTheme}=selection;
  const name='Design'+item.split('-').map(s=>s[0].toUpperCase()+s.slice(1)).join(''),extension=designFrameworks[framework].extension;
  const file=filename||name+extension;if(path.extname(file)!==extension)throw Error(`출력 확장자는 ${extension}입니다.`);
  const cssFile=path.basename(file,extension)+'.css';
@@ -31,11 +33,11 @@ export function designRecipe(selection,filename){
  const scope=path.basename(file,extension)+'-'+createHash('sha256').update(file+'\n'+JSON.stringify({...defaultTheme,...tokens})).digest('hex').slice(0,10);
  const mobile=designCatalog.find(x=>x.id===item).platform==='mobile-web';
  const admin=designCatalog.find(x=>x.id===item).platform==='admin-web';
- const html=markupFor(designMarkup[item],framework),attrs=`class="oc-design" data-design="${scope}" data-variant="${variant}" data-size="${size}"${mobile?' data-mobile="true"':''}${admin?' data-admin="true"':''}`;
+ const html=markupFor(designMarkup[item],framework),attrs=`class="oc-design" data-design="${scope}" data-variant="${variant}" data-size="${size}" data-motion="${motion}"${mobile?' data-mobile="true"':''}${admin?' data-admin="true"':''}`;
  let runtime=designAction.toString();
  const handlerName=admin?'adminDesignAction':'designAction';
- if(admin)runtime+='\n'+adminAction.toString()+'\nfunction adminDesignAction(event,emit=()=>{}) { designAction(event,emit); adminAction(event,emit); }';
- if(framework==='angular')runtime=runtime.replace(/function (designAction|adminAction|adminDesignAction)\(event,\s*emit=\(\)=>\{\}\)/g,'function $1(event: Event,emit: (detail: Record<string, unknown>) => void)').replaceAll('filter(node=>node instanceof HTMLTableRowElement)','filter((node): node is HTMLTableRowElement=>node instanceof HTMLTableRowElement)').replaceAll('filter(node=>node instanceof HTMLInputElement)','filter((node): node is HTMLInputElement=>node instanceof HTMLInputElement)');
+ if(admin)runtime+='\n'+designMotion.toString()+'\n'+adminAction.toString()+'\nfunction adminDesignAction(event,emit=()=>{}) { designAction(event,emit); adminAction(event,emit); }';
+ if(framework==='angular')runtime=runtime.replace(/function (designAction|adminAction|adminDesignAction)\(event,\s*emit=\(\)=>\{\}\)/g,'function $1(event: Event,emit: (detail: Record<string, unknown>) => void)').replace('function designMotion(root,node)','function designMotion(root: HTMLElement,node: Element | null)').replaceAll('filter(node=>node instanceof HTMLTableRowElement)','filter((node): node is HTMLTableRowElement=>node instanceof HTMLTableRowElement)').replaceAll('filter(node=>node instanceof HTMLInputElement)','filter((node): node is HTMLInputElement=>node instanceof HTMLInputElement)');
  const events="['click','keydown','submit','input','change','focusin','focusout','mouseout']";
  let code;
  if(framework==='react')code=`'use client';\nimport { useId, useRef, useEffect } from 'react';\nimport './${cssFile}';\n\n${runtime}\n\nexport default function ${name}({ onAction }) {\n const id=useId(), root=useRef(null);\n useEffect(()=>{const el=root.current;if(!el)return;const handler=e=>${handlerName}(e,onAction);for(const type of ${events})el.addEventListener(type,handler);return()=>{for(const type of ${events})el.removeEventListener(type,handler);};},[onAction]);\n return <section ${attrs.replace('class=','className=')} ref={root}>${html}</section>;\n}\n`;

@@ -1,13 +1,16 @@
+import {designMotion} from './design-motion.js';
 import {adminAction} from './design-admin-behavior.js';
 import {designAction} from './design-catalog.js';
 // This frame only renders bundled markup. Imported team code never enters it.
 export function mobilePreviewRuntime(parentOrigin) {
   const root = document.querySelector('.oc-design');
   if (!root) return;
-  let queued = false;
+  let queued = false, modalOpen = false;
   function measure() {
     queued = false;
-    const scope = root.querySelector('dialog[open]') || root;
+    const dialog = root.querySelector('dialog[open]'), scope = dialog || root;
+    if(dialog&&!modalOpen)parent.postMessage({type:'oscode-mobile-dialog'},parentOrigin);
+    modalOpen=Boolean(dialog);
     const controls = [...scope.querySelectorAll('button,input,a[href],select,textarea')].filter(el => {
       const rect = el.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== 'hidden';
@@ -48,5 +51,5 @@ export function mobilePreviewHtml(markup, css, settings, nonce) {
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>모바일 디자인 미리보기</title><style>
 html{color-scheme:light;--oc-safe-bottom:${settings.safeArea ? 34 : 0}px}body{margin:0}*{box-sizing:border-box}
 ${css}
-</style></head><body><section class="oc-design" data-variant="${settings.variant}" data-size="${settings.size}"${settings.mobile ? ' data-mobile="true"' : ''}${settings.admin ? ' data-admin="true"' : ''}>${markup.replaceAll('__id__','mobile')}</section><script nonce="${nonce}">${designAction.toString()}\n${adminAction.toString()}\n(${mobilePreviewRuntime.toString()})(${config});<` + '/script></body></html>';
+</style></head><body><section class="oc-design" data-variant="${settings.variant}" data-size="${settings.size}" data-motion="${settings.motion||'auto'}"${settings.mobile ? ' data-mobile="true"' : ''}${settings.admin ? ' data-admin="true"' : ''}>${markup.replaceAll('__id__','mobile')}</section><script nonce="${nonce}">${designAction.toString()}\n${designMotion.toString()}\n${adminAction.toString()}\n(${mobilePreviewRuntime.toString()})(${config});<` + '/script></body></html>';
 }
